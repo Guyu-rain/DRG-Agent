@@ -34,17 +34,23 @@ export interface ExecutionLog {
 }
 
 export interface SystemConfig {
-  llmConfig: {
+  llm: {
     apiBase: string;
     model: string;
     maxRetries: number;
-    timeout: number;
+    timeoutSeconds: number;
   };
-  storageConfig: {
+  storage: {
     documentPath: string;
     ruleDataPath: string;
   };
-  activeRuleVersionId?: string;
-  demoInitialized: boolean;
-  updatedAt: string;
+  rules: {
+    activeRuleVersionId?: string;
+  };
+}
+
+export interface HealthStatus {
+  status: 'healthy' | 'degraded';
+  components: Record<string, string>;
+  uptime?: string;
 }

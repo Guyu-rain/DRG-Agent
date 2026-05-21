@@ -55,5 +55,5 @@ class TestExportRequest(CamelModel):
 
 class TestSubmitRequest(CamelModel):
     test_case_ids: list[str]
-    doc_title: str
+    doc_title: str = "DRG-Agent 测试文档"
     doc_type: str = "testing"

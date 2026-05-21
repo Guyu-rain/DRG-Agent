@@ -43,8 +43,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     return response.data.docTaskId;
   },
   submitDocument: async (docId) => {
-    const response = await documentsApi.submit(docId);
-    set({ currentDocument: response.data });
+    await documentsApi.submit(docId);
+    // 提交接口返回提交记录，重新拉取文档详情以刷新状态
+    await get().viewDocument(docId);
     await get().fetchDocuments();
   },
 }));

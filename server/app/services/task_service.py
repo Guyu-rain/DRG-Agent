@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ErrorCode, NotFoundException
 from app.models import DocumentTask, GroupingTask, TaskStep, TestTask
+
+
+def _duration_ms(started: datetime | None, finished: datetime | None) -> int | None:
+    """根据起止时间计算耗时 (毫秒)。"""
+    if started and finished:
+        return int((finished - started).total_seconds() * 1000)
+    return None
 
 
 class TaskService:
@@ -24,8 +33,13 @@ class TaskService:
             rows = (await self.db.execute(select(GroupingTask))).scalars().all()
             items.extend(
                 {
-                    "taskId": t.id, "type": "grouping", "status": t.status,
-                    "createdAt": t.created_at, "finishedAt": t.finished_at,
+                    "taskId": t.id,
+                    "type": "grouping",
+                    "title": f"DRG 入组 · {(t.input_snapshot or {}).get('primaryDiagnosis') or t.case_id}",
+                    "status": t.status,
+                    "createdAt": t.created_at,
+                    "finishedAt": t.finished_at,
+                    "durationMs": t.duration_ms,
                 }
                 for t in rows
             )
@@ -33,8 +47,13 @@ class TaskService:
             rows = (await self.db.execute(select(DocumentTask))).scalars().all()
             items.extend(
                 {
-                    "taskId": t.id, "type": "document_gen", "status": t.status,
-                    "createdAt": t.created_at, "finishedAt": t.finished_at,
+                    "taskId": t.id,
+                    "type": "document",
+                    "title": f"文档生成 · {t.title}",
+                    "status": t.status,
+                    "createdAt": t.created_at,
+                    "finishedAt": t.finished_at,
+                    "durationMs": _duration_ms(t.started_at, t.finished_at),
                 }
                 for t in rows
             )
@@ -42,8 +61,13 @@ class TaskService:
             rows = (await self.db.execute(select(TestTask))).scalars().all()
             items.extend(
                 {
-                    "taskId": t.id, "type": "test_gen", "status": t.status,
-                    "createdAt": t.created_at, "finishedAt": t.finished_at,
+                    "taskId": t.id,
+                    "type": "testcase",
+                    "title": f"测试用例生成 · {t.generated_count or 0} 条",
+                    "status": t.status,
+                    "createdAt": t.created_at,
+                    "finishedAt": t.finished_at,
+                    "durationMs": _duration_ms(t.started_at, t.finished_at),
                 }
                 for t in rows
             )
@@ -65,11 +89,23 @@ class TaskService:
                 )
             ).scalars().all()
             return {
-                "taskId": grouping.id, "type": "grouping", "status": grouping.status,
-                "startedAt": grouping.started_at, "finishedAt": grouping.finished_at,
+                "taskId": grouping.id,
+                "type": "grouping",
+                "title": f"DRG 入组 · {(grouping.input_snapshot or {}).get('primaryDiagnosis') or grouping.case_id}",
+                "status": grouping.status,
+                "startedAt": grouping.started_at,
+                "finishedAt": grouping.finished_at,
                 "durationMs": grouping.duration_ms,
                 "steps": [
-                    {"step": s.step_name, "status": s.status, "durationMs": s.duration_ms}
+                    {
+                        "stepName": s.step_name,
+                        "stepOrder": s.step_order,
+                        "status": s.status,
+                        "durationMs": s.duration_ms,
+                        "inputSummary": s.input_summary,
+                        "outputSummary": s.output_summary,
+                        "errorMessage": s.error_message,
+                    }
                     for s in steps
                 ],
                 "error": (
@@ -82,16 +118,28 @@ class TaskService:
         doc = await self.db.get(DocumentTask, task_id)
         if doc is not None:
             return {
-                "taskId": doc.id, "type": "document_gen", "status": doc.status,
-                "startedAt": doc.started_at, "finishedAt": doc.finished_at, "steps": [],
+                "taskId": doc.id,
+                "type": "document",
+                "title": f"文档生成 · {doc.title}",
+                "status": doc.status,
+                "startedAt": doc.started_at,
+                "finishedAt": doc.finished_at,
+                "durationMs": _duration_ms(doc.started_at, doc.finished_at),
+                "steps": [],
                 "error": {"message": doc.error_message} if doc.error_message else None,
             }
 
         test = await self.db.get(TestTask, task_id)
         if test is not None:
             return {
-                "taskId": test.id, "type": "test_gen", "status": test.status,
-                "startedAt": test.started_at, "finishedAt": test.finished_at, "steps": [],
+                "taskId": test.id,
+                "type": "testcase",
+                "title": f"测试用例生成 · {test.generated_count or 0} 条",
+                "status": test.status,
+                "startedAt": test.started_at,
+                "finishedAt": test.finished_at,
+                "durationMs": _duration_ms(test.started_at, test.finished_at),
+                "steps": [],
                 "error": {"message": test.error_message} if test.error_message else None,
             }
 

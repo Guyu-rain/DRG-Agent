@@ -34,33 +34,41 @@ export const handlers = [
     await delay(180);
     return ok({
       status: 'healthy',
-      database: 'connected',
-      redis: 'connected',
-      llm: 'mocked',
-      activeRuleVersionId: 'RV-20260519-001',
+      components: {
+        database: 'connected',
+        redis: 'connected',
+        celery: 'running',
+        document_storage: 'available',
+        llm_api: 'configured',
+      },
+      uptime: '0h 12m',
     });
   }),
   http.get(`${api}/system/config`, () =>
     ok({
-      llmConfig: {
-        apiBase: 'https://openkey.cloud/v1',
-        model: 'deepseek-v3',
+      llm: {
+        apiBase: 'https://api.deepseek.com',
+        model: 'deepseek-chat',
         maxRetries: 3,
-        timeout: 60,
+        timeoutSeconds: 60,
       },
-      storageConfig: {
+      storage: {
         documentPath: './server/documents',
         ruleDataPath: './server/data/rules',
       },
-      activeRuleVersionId: 'RV-20260519-001',
-      demoInitialized: true,
-      updatedAt: '2026-05-21T07:00:00Z',
+      rules: {
+        activeRuleVersionId: 'RV-20260519-001',
+      },
     }),
   ),
   http.put(`${api}/system/config`, async ({ request }) => ok(await request.json())),
-  http.post(`${api}/system/init-demo`, async () => {
+  http.post(`${api}/system/demo/init`, async () => {
     await delay(320);
-    return ok({ initialized: true, message: '演示数据已初始化' });
+    return ok({
+      ruleVersionId: 'RV-20260519-001',
+      sampleCaseIds: ['CASE-20260519-001', 'CASE-20260519-002'],
+      message: '演示数据初始化成功',
+    });
   }),
 
   http.post(`${api}/cases`, async ({ request }) => {
@@ -224,8 +232,19 @@ export const handlers = [
     return ok({ ...base, title: body.title ?? base.title, content: body.content ?? base.content, version: 'V1.1' });
   }),
   http.post(`${api}/documents/:docId/submit`, ({ params }) => {
-    const base = documentDetails[String(params.docId)] ?? documentDetails[documents[0].docId];
-    return ok({ ...base, status: 'submitted', submittedAt: '2026-05-21T07:40:00Z' });
+    const docId = String(params.docId);
+    const base = documentDetails[docId] ?? documentDetails[documents[0].docId];
+    return ok({
+      docId,
+      status: 'submitted',
+      submittedAt: '2026-05-21T07:40:00Z',
+      submissionRecord: {
+        submitter: '用户/文档提交智能体',
+        version: base.version,
+        filePath: `/documents/${base.type}/${docId}_${base.version}.md`,
+        checksum: 'sha256:demo-checksum',
+      },
+    });
   }),
   http.get(`${api}/documents/:docId/versions`, () =>
     ok({

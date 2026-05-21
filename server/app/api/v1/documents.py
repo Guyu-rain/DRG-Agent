@@ -33,7 +33,8 @@ async def get_document_task(doc_task_id: str, db: AsyncSession = Depends(get_db)
     return ok({
         "docTaskId": task.id,
         "status": task.status,
-        "docId": task.result_doc_id,
+        "createdAt": task.created_at,
+        "resultDocId": task.result_doc_id,
         "errorMessage": task.error_message,
     })
 

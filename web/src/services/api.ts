@@ -3,15 +3,26 @@ import { message } from 'antd';
 import type { ApiErrorResponse } from '@/types/api';
 
 export const apiClient = axios.create({
+  // 相对路径：开发环境经 Vite 代理转发到后端 :8000，避免跨域
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api/v1',
-  timeout: 30000,
+  // 文档 / 测试用例生成等接口含 LLM 调用，预留较长超时
+  timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 });
 
 apiClient.interceptors.response.use(
   (response) => response.data,
   (error: AxiosError<ApiErrorResponse>) => {
-    const msg = error.response?.data?.message || error.message || '网络错误';
+    let msg = error.response?.data?.message;
+    if (!msg) {
+      if (error.code === 'ECONNABORTED') {
+        msg = '请求超时，请稍后重试';
+      } else if (error.code === 'ERR_NETWORK') {
+        msg = '网络连接失败，请确认后端服务已启动';
+      } else {
+        msg = error.message || '网络错误';
+      }
+    }
     message.error(msg);
     return Promise.reject(error);
   },

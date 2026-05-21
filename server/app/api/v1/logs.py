@@ -35,14 +35,15 @@ async def list_logs(
     rows = (await db.execute(stmt)).scalars().all()
     items = [
         {
-            "id": log.id,
+            "logId": log.id,
             "timestamp": log.timestamp,
             "level": log.level,
             "agent": log.agent,
             "taskId": log.task_id,
             "message": log.message,
-            "input": log.input_summary,
-            "output": log.output_summary,
+            "inputSummary": log.input_summary,
+            "outputSummary": log.output_summary,
+            "errorDetail": log.error_detail,
         }
         for log in rows
     ]

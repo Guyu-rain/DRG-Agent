@@ -2,9 +2,11 @@
 
 ## 1. 项目定位
 
-`web/` 是 DRG-Agent 的前端工程，负责提供医保 DRG 入组智能体系统的浏览器端交互界面。前端采用前后端分离架构，通过 REST API 与后端通信；开发阶段默认启用 MSW Mock 服务，因此即使后端未启动，也可以独立调试页面和核心交互流程。
+`web/` 是 DRG-Agent 的前端工程，负责提供医保 DRG 入组智能体系统的浏览器端交互界面。前端采用前后端分离架构，通过 REST API 与后端通信。
 
-当前前端覆盖 Phase 2 必须功能：
+**自 Phase 3 集成起，前端默认连接真实后端**（通过 Vite 代理转发到 `http://localhost:8000`）。MSW Mock 改为按需启用——仅当显式设置 `VITE_ENABLE_MSW=true` 时启用，用于后端未就绪时的离线前端开发。Vitest 单元测试始终使用 MSW Node 服务，与浏览器端开关无关。
+
+当前前端覆盖以下功能页面：
 
 - 任务中心
 - DRG 入组工作台
@@ -13,6 +15,8 @@
 - 测试用例管理
 - 执行日志
 - 系统配置
+
+全局错误边界（`components/Common/ErrorBoundary.tsx`）包裹整个应用，单个页面组件渲染异常不会导致整页白屏。
 
 ## 2. 技术栈与依赖
 
@@ -100,7 +104,8 @@ web/
 - `Common/PageHeader.tsx`：统一页面标题区。
 - `Common/Loading.tsx`：加载状态。
 - `Common/EmptyState.tsx`：空状态。
-- `Common/ErrorFallback.tsx`：错误兜底展示。
+- `Common/ErrorBoundary.tsx`：全局错误边界（类组件），捕获子树渲染异常。
+- `Common/ErrorFallback.tsx`：错误边界的兜底界面，提供重试 / 刷新。
 
 ### 4.3 状态管理
 
@@ -125,13 +130,11 @@ web/
 - `tasks.ts`：任务与日志接口。
 - `system.ts`：系统配置与健康检查接口。
 
-默认 API 地址为：
+默认 API 地址为相对路径 `/api/v1`，开发环境由 Vite 代理（`vite.config.ts` 中的 `server.proxy`）转发到后端 `http://localhost:8000`，因此浏览器视角为同源、不触发跨域。
 
-```text
-/api/v1
-```
+Axios 超时设为 60 秒（文档 / 测试用例生成含真实 LLM 调用，耗时较长）。响应拦截器对超时、网络中断等错误给出友好中文提示。
 
-如需覆盖，可设置环境变量：
+如需直接指定后端地址（不走代理），可设置环境变量：
 
 ```bash
 VITE_API_BASE_URL=http://localhost:8000/api/v1
@@ -139,18 +142,20 @@ VITE_API_BASE_URL=http://localhost:8000/api/v1
 
 ### 4.5 Mock 服务
 
-Mock 位于 `src/mocks/`，使用 MSW：
+Mock 位于 `src/mocks/`，使用 MSW，其响应结构与真实后端契约保持一致：
 
 - `handlers.ts`：Mock API 路由。
 - `browser.ts`：浏览器开发环境 Worker。
 - `server.ts`：Vitest Node 环境 Mock Server。
 - `data/`：病例、规则、入组结果、文档、测试用例、任务和日志样例数据。
 
-开发环境默认启用 MSW。若需要关闭 Mock 并直接请求真实后端：
+**Phase 3 起浏览器端默认不启用 MSW**，`corepack pnpm dev` 直接连接真实后端。仅在后端未就绪、需离线开发前端时显式启用：
 
 ```bash
-VITE_ENABLE_MSW=false corepack pnpm dev
+VITE_ENABLE_MSW=true corepack pnpm dev
 ```
+
+Vitest 单元测试始终通过 `src/mocks/server.ts` 拦截请求，不受上述开关影响。
 
 ## 5. 安装依赖
 
@@ -170,6 +175,8 @@ corepack pnpm install
 
 ## 6. 启动开发服务
 
+前端默认连接真实后端，启动前请确保后端已运行（见 `server/README.md`，或在仓库根目录执行 `./start.sh` 一键启动整套环境）。
+
 ```bash
 cd web
 corepack pnpm dev
@@ -181,7 +188,13 @@ corepack pnpm dev
 http://localhost:5173/
 ```
 
-Vite 会监听 `0.0.0.0`，局域网地址也会在终端中显示。
+Vite 会监听 `0.0.0.0`，局域网地址也会在终端中显示。若 5173 被占用，Vite 会自动改用 5174 等端口。
+
+若后端尚未就绪、希望仅调试前端，可启用 MSW Mock：
+
+```bash
+VITE_ENABLE_MSW=true corepack pnpm dev
+```
 
 ## 7. 关闭开发服务
 
@@ -285,31 +298,33 @@ corepack pnpm test
 
 ## 11. 与后端联调
 
-1. 启动后端服务，确保 API 可访问：
+Phase 3 起这是**默认模式**，无需额外环境变量。
 
-```text
-http://localhost:8000/api/v1
-```
-
-2. 关闭前端 MSW：
+1. 启动后端（确保 `http://localhost:8000/api/v1` 可访问）：
 
 ```bash
-cd web
-VITE_ENABLE_MSW=false VITE_API_BASE_URL=http://localhost:8000/api/v1 corepack pnpm dev
+cd server && ../.venv/bin/uvicorn main:app --reload --port 8000
 ```
 
-3. 打开：
+2. 启动前端：
 
-```text
-http://localhost:5173/
+```bash
+cd web && corepack pnpm dev
 ```
 
-前端会直接请求真实后端接口。
+3. 打开 <http://localhost:5173/>。前端请求 `/api/v1/*` 由 Vite 代理转发到后端，浏览器视角同源。
+
+4. 首次使用在「系统配置」页点击「初始化演示数据」，或执行
+   `curl -X POST http://localhost:8000/api/v1/system/demo/init`，导入规则与样例病历。
+
+> 也可在仓库根目录执行 `./start.sh` 一键启动 Docker + 后端 + 前端并自动初始化演示数据。
 
 ## 12. 注意事项
 
-- 本项目文件名按当前请求创建为 `READMD.md`。
-- 开发模式默认使用 Mock 数据，适合独立前端开发。
+- 本项目前端说明文件名为 `READMD.md`（沿用建仓时的命名）。
+- Phase 3 起开发模式默认连接真实后端；MSW 仅在 `VITE_ENABLE_MSW=true` 时启用。
 - 生产构建不会启用 MSW。
-- 若 5173 端口被占用，可停止原进程或修改 `vite.config.ts` 中的 `server.port`。
+- 文档 / 测试用例生成含真实 LLM 调用，单次可能 15–40 秒，请耐心等待；Axios 超时已设为 60 秒。
+- 若 5173 端口被占用，Vite 会自动切换到其它端口（如 5174），代理仍生效。
+- 前端报「网络连接失败」时，多为后端未启动，请先启动 `server`。
 - 不要提交 `node_modules/` 和 `dist/`。
