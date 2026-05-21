@@ -32,6 +32,7 @@ docker-compose.override.yml
 # Build / logs / coverage
 logs/
 *.log
+*.tsbuildinfo
 htmlcov/
 .coverage
 .pytest_cache/
@@ -42,6 +43,10 @@ htmlcov/
 tmp/
 temp/
 *.tmp
+
+# Frontend generated config output
+web/vite.config.js
+web/vite.config.d.ts
 
 # Data (chosen samples/rules may be committed)
 # data/rules/*

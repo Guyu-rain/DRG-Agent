@@ -1,0 +1,139 @@
+import { ExportOutlined, PlayCircleOutlined, SendOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Descriptions, Drawer, Form, InputNumber, Select, Space, Table, Tag, message } from 'antd';
+import { useEffect, useState } from 'react';
+import { PageHeader } from '@/components/Common/PageHeader';
+import { testcasesApi } from '@/services';
+import { useTestcaseStore } from '@/stores/testcaseStore';
+import type { ScenarioType, TestCaseItem, TestPriority } from '@/types/testcase';
+import { priorityLabels, scenarioLabels } from '@/utils/constants';
+import { formatDateTime } from '@/utils/format';
+
+export function TestCase() {
+  const { testcases, isGenerating, generateTestcases, fetchTestcases, setFilter } = useTestcaseStore();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [detail, setDetail] = useState<TestCaseItem | null>(null);
+
+  useEffect(() => {
+    void fetchTestcases();
+  }, [fetchTestcases]);
+
+  const generate = async (values: { scenarioTypes: ScenarioType[]; maxCount: number; mdc: string }) => {
+    const taskId = await generateTestcases({
+      ruleVersionId: 'RV-20260519-001',
+      scenarioTypes: values.scenarioTypes,
+      scope: { mdcList: [values.mdc], includeAllRules: false },
+      maxCount: values.maxCount,
+    });
+    message.success(`测试用例生成任务已创建：${taskId}`);
+  };
+
+  return (
+    <div>
+      <PageHeader title="测试用例管理" description="生成、筛选、执行和导出 DRG 入组测试用例。" />
+      <div className="two-column">
+        <section className="content-band">
+          <h3 className="section-title">生成配置</h3>
+          <Form
+            layout="vertical"
+            initialValues={{ scenarioTypes: ['normal', 'boundary', 'abnormal'], maxCount: 50, mdc: 'MDCB' }}
+            onFinish={(values) => void generate(values)}
+          >
+            <Form.Item label="规则版本" name="ruleVersionId">
+              <Select defaultValue="RV-20260519-001" options={[{ value: 'RV-20260519-001', label: 'DRG 2.0 演示规则' }]} />
+            </Form.Item>
+            <Form.Item label="场景类型" name="scenarioTypes">
+              <Checkbox.Group
+                options={[
+                  { value: 'normal', label: '正常' },
+                  { value: 'boundary', label: '边界' },
+                  { value: 'abnormal', label: '异常' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item label="范围" name="mdc">
+              <Select options={[{ value: 'MDCB', label: 'MDCB 神经系统' }]} />
+            </Form.Item>
+            <Form.Item label="数量上限" name="maxCount">
+              <InputNumber min={1} max={200} style={{ width: '100%' }} />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={isGenerating}>
+              生成用例
+            </Button>
+          </Form>
+        </section>
+        <section className="content-band">
+          <Space style={{ marginBottom: 16 }} wrap>
+            <Select
+              allowClear
+              placeholder="全部场景"
+              style={{ width: 140 }}
+              onChange={(scenarioType?: ScenarioType) => {
+                setFilter({ scenarioType });
+                void fetchTestcases();
+              }}
+              options={Object.entries(scenarioLabels).map(([value, label]) => ({ value, label }))}
+            />
+            <Button icon={<ExportOutlined />} onClick={() => void testcasesApi.export(selected).then(() => message.success('已导出选中用例'))}>
+              导出选中
+            </Button>
+            <Button icon={<SendOutlined />} onClick={() => void testcasesApi.submitToDocuments(selected).then(() => message.success('已提交到文档系统'))}>
+              提交到文档系统
+            </Button>
+          </Space>
+          <Table
+            rowKey="testCaseId"
+            dataSource={testcases}
+            rowSelection={{ selectedRowKeys: selected, onChange: (keys) => setSelected(keys.map(String)) }}
+            pagination={false}
+            columns={[
+              { title: 'ID', dataIndex: 'testCaseId', width: 120 },
+              { title: '标题', dataIndex: 'title' },
+              {
+                title: '类型',
+                dataIndex: 'scenarioType',
+                width: 100,
+                render: (value: ScenarioType) => <Tag color={value === 'normal' ? 'green' : value === 'boundary' ? 'orange' : 'red'}>{scenarioLabels[value]}</Tag>,
+              },
+              {
+                title: '优先级',
+                dataIndex: 'priority',
+                width: 90,
+                render: (value: TestPriority) => priorityLabels[value],
+              },
+              {
+                title: '操作',
+                width: 170,
+                render: (_, record) => (
+                  <Space>
+                    <Button size="small" onClick={() => setDetail(record)}>
+                      详情
+                    </Button>
+                    <Button size="small" icon={<PlayCircleOutlined />} onClick={() => message.success('测试用例执行完成')}>
+                      执行
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </section>
+      </div>
+      <Drawer open={!!detail} title={detail?.title} width={560} onClose={() => setDetail(null)}>
+        {detail ? (
+          <Descriptions column={1} bordered size="small">
+            <Descriptions.Item label="ID">{detail.testCaseId}</Descriptions.Item>
+            <Descriptions.Item label="类型">{scenarioLabels[detail.scenarioType]}</Descriptions.Item>
+            <Descriptions.Item label="优先级">{priorityLabels[detail.priority]}</Descriptions.Item>
+            <Descriptions.Item label="创建时间">{formatDateTime(detail.createdAt)}</Descriptions.Item>
+            <Descriptions.Item label="输入病历">
+              <pre>{JSON.stringify(detail.inputCase, null, 2)}</pre>
+            </Descriptions.Item>
+            <Descriptions.Item label="预期结果">
+              <pre>{JSON.stringify(detail.expectedResult, null, 2)}</pre>
+            </Descriptions.Item>
+          </Descriptions>
+        ) : null}
+      </Drawer>
+    </div>
+  );
+}

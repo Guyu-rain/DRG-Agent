@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - esbuild
+  - msw
+allowBuilds:
+  esbuild: true
+  msw: true
