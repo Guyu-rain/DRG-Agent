@@ -51,3 +51,15 @@ export interface DocumentVersion {
   createdAt: string;
   createdBy?: string;
 }
+
+export interface DocumentSubmitResponse {
+  docId: string;
+  status: DocumentStatus;
+  submittedAt: string;
+  submissionRecord: {
+    submitter: string;
+    version: string;
+    filePath: string;
+    checksum: string;
+  };
+}

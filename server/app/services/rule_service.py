@@ -187,17 +187,38 @@ class RuleService:
 
     @staticmethod
     def to_detail(version: RuleVersion) -> dict:
+        """规则版本详情。将内部 snake_case 规则字段归一化为接口 camelCase。"""
         return {
             "versionId": version.id,
             "versionName": version.version_name,
             "description": version.description,
             "status": version.status,
-            "mdcList": version.mdc_list or [],
-            "adrgList": version.adrg_list or [],
-            "drgList": version.drg_list or [],
+            "isActive": version.status == "active",
+            "importedAt": version.imported_at,
+            "mdcList": [
+                {"code": m.get("code"), "name": m.get("name"), "icdPrefix": m.get("icd_prefixes", [])}
+                for m in (version.mdc_list or [])
+            ],
+            "adrgList": [
+                {
+                    "code": a.get("code"),
+                    "name": a.get("name"),
+                    "mdc": a.get("mdc"),
+                    "surgeryList": a.get("surgery_list", []),
+                    "diagnosisList": a.get("diagnosis_list", []),
+                }
+                for a in (version.adrg_list or [])
+            ],
+            "drgList": [
+                {"code": d.get("code"), "name": d.get("name"), "adrg": d.get("adrg"), "ccLevel": d.get("cc_level")}
+                for d in (version.drg_list or [])
+            ],
             "mccList": version.mcc_list or [],
             "ccList": version.cc_list or [],
-            "exclusionTable": version.exclusion_table or [],
+            "exclusionTable": [
+                {"diagCode": e.get("diag_code"), "excludedBy": e.get("excluded_by", [])}
+                for e in (version.exclusion_table or [])
+            ],
             "ruleCount": version.rule_counts,
             "parseErrors": version.parse_errors or [],
         }

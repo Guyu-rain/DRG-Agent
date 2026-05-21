@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { systemApi } from '@/services';
-import type { SystemConfig } from '@/types/task';
+import type { HealthStatus, SystemConfig } from '@/types/task';
 
 interface SettingsState {
   config: SystemConfig | null;
-  health: Record<string, unknown> | null;
+  health: HealthStatus | null;
   fetchConfig: () => Promise<void>;
   saveConfig: (config: SystemConfig) => Promise<void>;
   fetchHealth: () => Promise<void>;

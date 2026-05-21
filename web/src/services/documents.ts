@@ -4,6 +4,7 @@ import type {
   DocumentDetail,
   DocumentGenerateRequest,
   DocumentStatus,
+  DocumentSubmitResponse,
   DocumentSummary,
   DocumentTaskResponse,
   DocumentVersion,
@@ -23,7 +24,7 @@ export const documentsApi = {
   update: (docId: string, data: { title?: string; content: string }) =>
     request<ApiResponse<DocumentDetail>>({ method: 'PUT', url: `/documents/${docId}`, data }),
   submit: (docId: string) =>
-    request<ApiResponse<DocumentDetail>>({ method: 'POST', url: `/documents/${docId}/submit` }),
+    request<ApiResponse<DocumentSubmitResponse>>({ method: 'POST', url: `/documents/${docId}/submit` }),
   versions: (docId: string) =>
     request<ApiResponse<{ items: DocumentVersion[]; total: number }>>({
       method: 'GET',

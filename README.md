@@ -19,11 +19,11 @@ DRG-Agent 是一个面向医保 DRG（疾病诊断相关分组）入组场景的
 
 ```
 DRG-Agent/
-├── plans/                  # 项目规划文档（技术栈、架构、接口、执行计划等）
-├── server/                 # 后端 (FastAPI + LangGraph)
+├── plans/                  # 项目规划文档（技术栈、架构、接口、执行计划、分阶段开发）
+├── server/                 # 后端 (FastAPI + LangGraph)，详见 server/README.md
 │   ├── app/
 │   │   ├── api/v1/         # REST API 路由
-│   │   ├── core/           # 核心配置、数据库
+│   │   ├── core/           # 核心配置、数据库、中间件、异常
 │   │   ├── models/         # SQLAlchemy ORM 模型
 │   │   ├── schemas/        # Pydantic 请求/响应模型
 │   │   ├── services/       # 业务逻辑层
@@ -31,9 +31,11 @@ DRG-Agent/
 │   │   ├── engine/         # DRG 规则引擎（确定性算法）
 │   │   ├── llm/            # LLM 调用封装与 Prompt 模板
 │   │   └── tasks/          # Celery 异步任务
+│   ├── migrations/         # Alembic 数据库迁移
 │   └── tests/              # 后端测试
-├── web/                    # 前端 (React + TypeScript + Ant Design)
+├── web/                    # 前端 (React + TypeScript + Ant Design)，详见 web/READMD.md
 ├── docker-compose.yml      # Docker 服务编排 (PostgreSQL + Redis)
+├── start.sh / stop.sh      # 一键启动 / 停止脚本
 └── README.md
 ```
 
@@ -54,7 +56,7 @@ DRG-Agent/
 
 > **Windows 用户**: 推荐通过 WSL2 使用 mise，或使用 mise 的 Windows 原生支持。fnm 和 Docker Desktop 均原生支持 Windows。
 
-### 快速启动
+### 首次准备
 
 ```bash
 # 1. 克隆仓库
@@ -62,42 +64,59 @@ git clone <repo-url>
 cd DRG-Agent
 
 # 2. 安装运行时 (Node.js 22 + Python 3.12)
-fnm install 22        # Node.js 22 LTS
-fnm use 22
-mise install          # Python 3.12 (读取 .mise.toml)
-mise trust            # 信任项目配置
+fnm install 22 && fnm use 22       # Node.js 22 LTS
+mise install && mise trust         # Python 3.12 (读取 .mise.toml)
 
 # 3. 启用 pnpm (通过 corepack)
 corepack enable
 corepack prepare pnpm@11.1.3 --activate
 
-# 4. 启动数据库服务
+# 4. 安装依赖
+uv sync                            # 后端：创建 .venv 并安装 Python 依赖
+cd web && corepack pnpm install && cd ..   # 前端依赖
+
+# 5. 配置环境变量 (填入 LLM API Key)
+cp .env.example .env
+```
+
+### 一键启动（推荐）
+
+完成首次准备后，在仓库根目录执行：
+
+```bash
+./start.sh      # 启动 Docker(PostgreSQL+Redis) + 后端 + 前端，并自动初始化演示数据
+./stop.sh       # 停止全部服务（保留数据；./stop.sh --purge 彻底清理）
+```
+
+启动后访问：
+
+- 前端界面：<http://localhost:5173>
+- 后端 API 文档：<http://localhost:8000/docs>
+
+### 手动分步启动
+
+```bash
+# 数据库服务
 docker compose up -d
 
-# 5. 安装 Python 依赖
-uv sync               # 创建 .venv 并安装所有依赖
-
-# 6. 配置环境变量 (填入 LLM API Key)
-cp .env.example .env
-
-# 7. 数据库迁移
+# 后端：迁移 + 启动
 cd server
-alembic upgrade head
+../.venv/bin/alembic upgrade head
+../.venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# 8. 启动后端
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# (可选) Celery worker —— 文档/测试用例默认同步生成，不强制需要
+../.venv/bin/celery -A app.tasks worker --loglevel=info
 
-# 9. (可选) 启动 Celery worker
-celery -A app.tasks worker --loglevel=info
-
-# 10. 初始化演示数据
+# 初始化演示数据
 curl -X POST http://localhost:8000/api/v1/system/demo/init
 
-# 11. (后续) 启动前端
-cd web
-pnpm install
-pnpm dev
+# 前端（另开终端）—— 默认连接真实后端
+cd web && corepack pnpm dev
 ```
+
+> **前后端集成说明（Phase 3）**：前端默认通过 Vite 代理连接真实后端，无需 Mock。
+> 若后端未就绪、仅需调试前端，可执行 `VITE_ENABLE_MSW=true corepack pnpm dev` 启用 MSW Mock。
+> 详见 [server/README.md](server/README.md) 与 [web/READMD.md](web/READMD.md)。
 
 ### 版本锁定
 
@@ -178,12 +197,25 @@ mise deactivate                   # 卸载 mise shims
 
 ## 文档
 
+**规划文档**
+
 - [技术栈选型](plans/01_tech_stack.md)
 - [系统架构设计](plans/02_architecture.md)
 - [API 接口定义](plans/03_api_interfaces.md)
 - [项目执行计划](plans/04_execution_plan.md)
 - [数据模型设计](plans/05_data_model.md)
 - [智能体工作流设计](plans/06_agent_workflow.md)
+
+**分阶段开发文档**
+
+- [Phase 1 · 后端开发](plans/development_phases/phase1_backend.md)
+- [Phase 2 · 前端开发](plans/development_phases/phase2_frontend.md)
+- [Phase 3 · 前后端集成](plans/development_phases/phase3_integration.md)
+
+**子工程说明**
+
+- [后端说明 server/README.md](server/README.md) —— 架构、依赖、启动、关闭、测试、注意事项
+- [前端说明 web/READMD.md](web/READMD.md) —— 页面、状态管理、Mock、联调
 
 ---
 

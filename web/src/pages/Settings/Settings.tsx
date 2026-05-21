@@ -3,7 +3,6 @@ import { useEffect } from 'react';
 import { PageHeader } from '@/components/Common/PageHeader';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { SystemConfig } from '@/types/task';
-import { formatDateTime } from '@/utils/format';
 
 export function Settings() {
   const { config, health, fetchConfig, fetchHealth, saveConfig, initDemo } = useSettingsStore();
@@ -36,37 +35,37 @@ export function Settings() {
             <Form form={form} layout="vertical">
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item label="API Base" name={['llmConfig', 'apiBase']}>
+                  <Form.Item label="API Base" name={['llm', 'apiBase']}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="模型" name={['llmConfig', 'model']}>
+                  <Form.Item label="模型" name={['llm', 'model']}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="最大重试次数" name={['llmConfig', 'maxRetries']}>
+                  <Form.Item label="最大重试次数" name={['llm', 'maxRetries']}>
                     <InputNumber min={0} max={10} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="超时秒数" name={['llmConfig', 'timeout']}>
+                  <Form.Item label="超时秒数" name={['llm', 'timeoutSeconds']}>
                     <InputNumber min={5} max={300} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="文档存储路径" name={['storageConfig', 'documentPath']}>
+                  <Form.Item label="文档存储路径" name={['storage', 'documentPath']}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="规则数据路径" name={['storageConfig', 'ruleDataPath']}>
+                  <Form.Item label="规则数据路径" name={['storage', 'ruleDataPath']}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="当前活跃规则版本" name="activeRuleVersionId">
+                  <Form.Item label="当前活跃规则版本" name={['rules', 'activeRuleVersionId']}>
                     <Input />
                   </Form.Item>
                 </Col>
@@ -80,12 +79,14 @@ export function Settings() {
         <Col xs={24} lg={9}>
           <Card title="健康检查">
             <p>
-              服务状态：<Tag color={health?.status === 'healthy' ? 'green' : 'orange'}>{String(health?.status ?? '-')}</Tag>
+              服务状态：
+              <Tag color={health?.status === 'healthy' ? 'green' : 'orange'}>{health?.status ?? '-'}</Tag>
             </p>
-            <p>数据库：{String(health?.database ?? '-')}</p>
-            <p>Redis：{String(health?.redis ?? '-')}</p>
-            <p>LLM：{String(health?.llm ?? '-')}</p>
-            <p>配置更新时间：{formatDateTime(config?.updatedAt)}</p>
+            <p>数据库：{health?.components?.database ?? '-'}</p>
+            <p>Redis：{health?.components?.redis ?? '-'}</p>
+            <p>Celery：{health?.components?.celery ?? '-'}</p>
+            <p>LLM API：{health?.components?.llm_api ?? '-'}</p>
+            <p>运行时长：{health?.uptime ?? '-'}</p>
           </Card>
         </Col>
       </Row>
