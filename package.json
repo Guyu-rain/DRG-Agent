@@ -1,0 +1,9 @@
+{
+  "name": "drg-agent",
+  "private": true,
+  "description": "DRG-Agent: 医保 DRG 入组智能体系统",
+  "packageManager": "pnpm@11.1.3",
+  "engines": {
+    "node": ">=22"
+  }
+}

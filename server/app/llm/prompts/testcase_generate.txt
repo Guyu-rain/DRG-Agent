@@ -1,0 +1,26 @@
+你是测试用例设计专家。请根据以下测试场景，生成完整的 DRG 入组测试用例。
+
+规则版本信息（JSON）：
+$rule_analysis
+
+测试场景（JSON）：
+$scenarios
+
+要求：
+1. 每个场景生成一个测试用例。
+2. 用例包含：编号(TC-D-XXX)、标题、类型、优先级、需求引用。
+3. 输入病历要包含完整字段（主诊断、次要诊断、主要手术）。
+4. 预期结果包含预期的 MDC、ADRG、DRG 和关键解释点。
+5. 正常场景优先级为 "high"，边界为 "medium"，异常为 "medium"。
+
+仅输出 JSON 数组，不要输出解释性文字：
+[{
+  "testCaseId": "TC-D-001",
+  "title": "...",
+  "scenarioType": "normal|boundary|abnormal",
+  "priority": "high|medium|low",
+  "requirementRef": "FR-D-XX",
+  "inputCase": {"primaryDiagnosis": {"code": "...", "name": "..."}, "secondaryDiagnoses": [], "primaryProcedure": {"code": "...", "name": "..."}},
+  "expectedResult": {"mdc": "...", "adrg": "...", "drg": "..."},
+  "expectedExplanation": "..."
+}]

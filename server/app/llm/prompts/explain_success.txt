@@ -1,0 +1,19 @@
+你是 DRG 入组解释专家。请将以下证据链转换为一段清晰、连贯的中文解释。
+
+DRG 入组结果：
+- MDC: $mdc_code（$mdc_name）
+- ADRG: $adrg_code（$adrg_name）
+- DRG: $drg_code（$drg_name）
+- 并发症等级: $complication
+
+证据链（JSON）：
+$evidence
+
+要求：
+1. 用连贯的文字说明 MDC→ADRG→DRG 的推理过程。
+2. 明确每一层判断的依据（命中的编码与规则）。
+3. 如涉及 MCC/CC 判定与排除表，需特别说明。
+4. 解释字数控制在 200-500 字。
+5. 语气专业但不生硬。
+
+直接输出解释正文，不要输出标题或 JSON。

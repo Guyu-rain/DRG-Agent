@@ -1,0 +1,58 @@
+{
+  "_meta": {
+    "version_name": "DRG 2.0 演示规则",
+    "description": "课程演示用最小 DRG 规则集，覆盖 example/drg_example.json 的 4 个回归用例。",
+    "format": "drg-agent-rule-json-v1"
+  },
+  "mdc_list": [
+    { "code": "MDCB", "name": "神经系统疾病及功能障碍", "icd_prefixes": ["A01", "G00", "G01", "G04", "G40", "G93"] },
+    { "code": "MDCE", "name": "呼吸系统疾病及功能障碍", "icd_prefixes": ["J18", "J44", "J86", "J96", "J98"] },
+    { "code": "MDCF", "name": "循环系统疾病及功能障碍", "icd_prefixes": ["I10", "I20", "I21", "I50"] },
+    { "code": "MDCG", "name": "消化系统疾病及功能障碍", "icd_prefixes": ["C16", "K25", "K35", "K40", "K56"] },
+    { "code": "MDCH", "name": "肝、胆、胰疾病及功能障碍", "icd_prefixes": ["C22", "K80", "K81", "K83", "K85"] }
+  ],
+  "adrg_list": [
+    { "code": "BB1", "name": "神经系统复合手术", "mdc": "MDCB", "is_surgical": true, "surgery_list": ["38.1000x002"], "diagnosis_list": [] },
+    { "code": "BS1", "name": "神经系统其他疾患", "mdc": "MDCB", "is_surgical": false, "surgery_list": [], "diagnosis_list": ["A01", "G00", "G01"] },
+    { "code": "EC2", "name": "纵隔、气管、胸壁其他手术", "mdc": "MDCE", "is_surgical": true, "surgery_list": ["34.8200x002"], "diagnosis_list": [] },
+    { "code": "ES1", "name": "呼吸系统其他疾患", "mdc": "MDCE", "is_surgical": false, "surgery_list": [], "diagnosis_list": ["J86", "J18"] },
+    { "code": "FS1", "name": "循环系统其他疾患", "mdc": "MDCF", "is_surgical": false, "surgery_list": [], "diagnosis_list": ["I10"] },
+    { "code": "GB2", "name": "胃、十二指肠大手术", "mdc": "MDCG", "is_surgical": true, "surgery_list": ["43.7x03"], "diagnosis_list": [] },
+    { "code": "GS1", "name": "消化系统其他疾患", "mdc": "MDCG", "is_surgical": false, "surgery_list": [], "diagnosis_list": ["C16", "K25"] },
+    { "code": "HC1", "name": "胆总管手术", "mdc": "MDCH", "is_surgical": true, "surgery_list": ["51.6303"], "diagnosis_list": [] },
+    { "code": "HS1", "name": "肝胆胰其他疾患", "mdc": "MDCH", "is_surgical": false, "surgery_list": [], "diagnosis_list": ["K83", "K80"] }
+  ],
+  "drg_list": [
+    { "code": "BB11", "name": "神经系统复合手术，伴严重合并症或并发症", "adrg": "BB1", "cc_level": "MCC" },
+    { "code": "BB13", "name": "神经系统复合手术，伴合并症或并发症", "adrg": "BB1", "cc_level": "CC" },
+    { "code": "BB15", "name": "神经系统复合手术，不伴合并症或并发症", "adrg": "BB1", "cc_level": "NONE" },
+    { "code": "BS19", "name": "神经系统其他疾患", "adrg": "BS1", "cc_level": "NONE" },
+    { "code": "EC21", "name": "纵隔、气管、胸壁其他手术，伴严重合并症或并发症", "adrg": "EC2", "cc_level": "MCC" },
+    { "code": "EC29", "name": "纵隔、气管、胸壁其他手术，伴合并症或并发症", "adrg": "EC2", "cc_level": "CC" },
+    { "code": "EC25", "name": "纵隔、气管、胸壁其他手术，不伴合并症或并发症", "adrg": "EC2", "cc_level": "NONE" },
+    { "code": "ES19", "name": "呼吸系统其他疾患", "adrg": "ES1", "cc_level": "NONE" },
+    { "code": "FS19", "name": "循环系统其他疾患", "adrg": "FS1", "cc_level": "NONE" },
+    { "code": "GB21", "name": "胃、十二指肠大手术，伴严重合并症或并发症", "adrg": "GB2", "cc_level": "MCC" },
+    { "code": "GB29", "name": "胃、十二指肠大手术，伴合并症或并发症", "adrg": "GB2", "cc_level": "CC" },
+    { "code": "GB25", "name": "胃、十二指肠大手术，不伴合并症或并发症", "adrg": "GB2", "cc_level": "NONE" },
+    { "code": "GS19", "name": "消化系统其他疾患", "adrg": "GS1", "cc_level": "NONE" },
+    { "code": "HC11", "name": "胆总管手术，伴严重合并症或并发症", "adrg": "HC1", "cc_level": "MCC" },
+    { "code": "HC13", "name": "胆总管手术，伴合并症或并发症", "adrg": "HC1", "cc_level": "CC" },
+    { "code": "HC15", "name": "胆总管手术，不伴严重合并症或并发症", "adrg": "HC1", "cc_level": "NONE" },
+    { "code": "HS19", "name": "肝胆胰其他疾患", "adrg": "HS1", "cc_level": "NONE" }
+  ],
+  "mcc_list": [
+    { "code": "J96.0", "name": "急性呼吸衰竭", "level": "MCC" },
+    { "code": "I50.0", "name": "充血性心力衰竭", "level": "MCC" }
+  ],
+  "cc_list": [
+    { "code": "K66.002", "name": "肠粘连", "level": "CC" },
+    { "code": "I10", "name": "原发性高血压", "level": "CC" },
+    { "code": "I63.801", "name": "其他脑梗死", "level": "CC" }
+  ],
+  "exclusion_table": [
+    { "diag_code": "J96.0", "excluded_by": [] },
+    { "diag_code": "I10", "excluded_by": ["I10"] },
+    { "diag_code": "I63.801", "excluded_by": ["I63"] }
+  ]
+}

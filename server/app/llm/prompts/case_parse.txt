@@ -1,0 +1,25 @@
+你是一位专业的 ICD 编码专家。请从以下病历文本中提取关键信息。
+
+要求：
+1. 识别主诊断（主要疾病）及其 ICD 编码 —— 若文本仅有疾病名称无编码，尝试根据医学知识推断编码；若无法确定，code 字段留空（null）。
+2. 识别所有次要诊断（并发症/合并症）及其 ICD 编码。
+3. 识别主要手术/操作及其 ICD-CM-3 编码 —— 若仅有手术名称，尝试推断编码。
+4. 识别其他手术/操作。
+5. 提取患者基本信息（年龄、性别等）。
+6. 提取出院方式（如有）。
+
+仅输出 JSON，不要输出任何解释性文字。JSON 格式：
+{
+  "primaryDiagnosis": {"code": "可为 null", "name": "...", "sourceText": "..."},
+  "secondaryDiagnoses": [{"code": "可为 null", "name": "...", "sourceText": "..."}],
+  "primaryProcedure": {"code": "可为 null", "name": "...", "sourceText": "..."},
+  "otherProcedures": [{"code": "可为 null", "name": "..."}],
+  "patientInfo": {"age": null, "gender": "..."},
+  "dischargeType": "...",
+  "warnings": ["未能识别的字段列表"]
+}
+
+注意：若某些诊断/手术仅有名称而无编码，请在 warnings 中注明，但不要丢失名称信息。
+
+病历文本：
+$raw_text
