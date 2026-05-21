@@ -1,0 +1,20 @@
+.drg-input-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.parsed-case-panel .ant-descriptions-item-label {
+  width: 112px;
+}
+
+.result-summary-card {
+  border-color: #cfe0f1;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+.structured-form .ant-form-item {
+  margin-bottom: 12px;
+}
