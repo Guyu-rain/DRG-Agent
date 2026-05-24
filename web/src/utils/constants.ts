@@ -10,7 +10,8 @@ import {
 import type { DocType, DocumentStatus } from '@/types/document';
 import type { ScenarioType, TestPriority } from '@/types/testcase';
 
-export const brandColor = '#1F4E79';
+/** Sage — Clinical Editorial primary accent. See web/src/index.css :root --sage. */
+export const brandColor = '#6b8e7f';
 
 export const routeItems = [
   { key: '/', label: '任务中心', icon: DashboardOutlined },

@@ -24,8 +24,11 @@ function renderLayout(initialEntry = '/') {
 describe('AppLayout', () => {
   it('renders the system shell', () => {
     renderLayout();
+    // sidebar brand wordmark
     expect(screen.getByText('DRG-Agent')).toBeInTheDocument();
-    expect(screen.getByText('医保 DRG 入组智能体系统')).toBeInTheDocument();
+    // header breadcrumb root + nav items both render the labels — assert "all of"
+    expect(screen.getAllByText('任务中心').length).toBeGreaterThan(0);
+    expect(screen.getByText('DRG-AGENT')).toBeInTheDocument(); // breadcrumb root
   });
 
   it('renders routed child content', () => {

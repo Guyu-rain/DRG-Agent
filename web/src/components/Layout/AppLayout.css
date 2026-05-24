@@ -1,81 +1,345 @@
+/* ============================================================
+   AppLayout — Clinical Editorial shell
+   ============================================================ */
+
 .app-shell {
   min-height: 100vh;
-  background: #f4f7fb;
+  background: transparent;
 }
 
+/* ===== Sidebar ===== */
 .app-sider {
-  background: #173a5e !important;
+  position: relative;
+  background: var(--paper-2) !important;
+  border-right: 1px solid var(--rule);
+  padding-block: 4px;
+}
+
+/* a hairline of sage running down the right edge of the sider for craft */
+.app-sider::after {
+  content: '';
+  position: absolute;
+  top: 24px;
+  bottom: 24px;
+  right: -1px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--sage-soft) 18%, var(--sage-soft) 82%, transparent);
+  pointer-events: none;
 }
 
 .app-sider .ant-layout-sider-children {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.app-sider .ant-menu {
-  background: transparent;
-  border-inline-end: 0;
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.app-sider .ant-menu-item {
-  color: rgba(255, 255, 255, 0.74);
-  border-radius: 6px;
-  margin-inline: 10px;
-  width: calc(100% - 20px);
-}
-
-.app-sider .ant-menu-item-selected {
-  background: #e8f3ff;
-  color: #173a5e;
-  font-weight: 600;
-}
-
-.app-logo {
-  height: 64px;
+/* —— Brand —— */
+.app-brand {
   display: flex;
   align-items: center;
+  gap: 12px;
+  height: 72px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.app-brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.app-brand__name {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.app-brand__sub {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-mute);
+  letter-spacing: 0.01em;
+}
+
+.app-brand__sub em {
+  font-style: italic;
+}
+
+/* —— Section rubric above the menu —— */
+.app-sider__rubric {
+  padding: 18px 22px 8px;
+}
+
+/* —— Menu —— */
+.app-menu.ant-menu {
+  padding: 4px 14px;
+  border-inline-end: 0 !important;
+}
+
+.app-menu .ant-menu-item {
+  height: 40px;
+  line-height: 40px;
+  margin-block: 2px !important;
+  margin-inline: 0 !important;
+  width: 100%;
+  border-radius: var(--r-sm) !important;
+  padding-inline: 12px !important;
+  transition: background var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out);
+}
+
+.app-menu .ant-menu-item .ant-menu-title-content {
+  margin-inline-start: 12px;
+  flex: 1;
+}
+
+.app-menu .ant-menu-item .anticon {
+  color: var(--ink-mute);
+  font-size: 15px;
+  transition: color var(--t-fast) var(--ease-out);
+}
+
+.app-menu .ant-menu-item-selected .anticon,
+.app-menu .ant-menu-item:hover .anticon {
+  color: var(--sage-deep);
+}
+
+.app-menu .ant-menu-item-selected {
+  position: relative;
+  background: var(--sage-faint) !important;
+  color: var(--sage-deep) !important;
+}
+
+.app-menu .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--sage);
+}
+
+.app-menu--collapsed .ant-menu-item {
+  padding-inline: 0 !important;
+  text-align: center;
+}
+
+/* —— Row layout inside menu items —— */
+.app-nav-row {
+  display: inline-flex;
+  align-items: baseline;
   gap: 10px;
-  padding: 0 18px;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
+  width: 100%;
 }
 
-.logo-mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1f4e79;
+.app-nav-row__num {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  width: 18px;
+  flex-shrink: 0;
 }
 
+.ant-menu-item-selected .app-nav-row__num {
+  color: var(--sage);
+}
+
+.app-nav-row__label {
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* —— Sider foot rubric —— */
+.app-sider__foot {
+  margin-top: auto;
+  padding: 18px 22px 22px;
+}
+
+.app-sider__foot-rule {
+  width: 28px;
+  height: 1px;
+  background: var(--rule-strong);
+  margin-bottom: 10px;
+}
+
+.app-sider__foot-text {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-mute);
+  line-height: 1.55;
+}
+
+.app-sider__foot-text .eyebrow {
+  font-style: normal;
+}
+
+/* ===== Header ===== */
 .app-header {
-  height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid #e6edf5;
-  backdrop-filter: blur(8px);
+  height: 72px;
+  padding: 0 32px;
+  background: linear-gradient(180deg, rgba(247, 244, 236, 0.92), rgba(247, 244, 236, 0.78));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--rule-soft);
 }
 
+.app-header__left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.app-crumbs__root {
+  color: var(--ink-mute);
+}
+
+.app-crumbs__sep {
+  color: var(--ink-faint);
+}
+
+.app-crumbs__leaf {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.app-header__right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.app-pill--env .app-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sage);
+  box-shadow: 0 0 0 3px var(--sage-faint);
+  animation: pulse-sage 2.4s var(--ease-in-out) infinite;
+}
+
+@keyframes pulse-sage {
+  0%, 100% { box-shadow: 0 0 0 3px var(--sage-faint); }
+  50%      { box-shadow: 0 0 0 6px rgba(107, 142, 127, 0.18); }
+}
+
+.app-clock {
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+
+.app-avatar {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--ink);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+.app-avatar:hover {
+  transform: scale(1.04);
+}
+
+/* ===== Content ===== */
 .app-content {
-  padding: 24px;
+  padding: 32px 40px 48px;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
 }
 
+/* ===== Footer ===== */
 .app-footer {
-  padding: 16px 24px;
-  color: #64748b;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 32px 28px;
+  color: var(--ink-mute);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
   background: transparent;
 }
 
-@media (max-width: 760px) {
+.app-footer .mono {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--ink-3);
+}
+
+.app-footer__rule {
+  display: inline-block;
+  width: 28px;
+  height: 1px;
+  background: var(--rule-strong);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 980px) {
   .app-content {
-    padding: 16px;
+    padding: 24px 20px 36px;
+  }
+  .app-header {
+    padding: 0 18px;
+    height: 64px;
+  }
+  .app-header__right {
+    gap: 8px;
+  }
+  .app-clock,
+  .app-pill {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-crumbs {
+    font-size: 10.5px;
   }
 }

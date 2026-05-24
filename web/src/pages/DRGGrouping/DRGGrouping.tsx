@@ -66,8 +66,8 @@ export function DRGGrouping() {
         description="输入病历、选择规则版本，并查看确定性规则引擎生成的入组结果和证据链。"
       />
       {resultExpired ? <Alert type="warning" showIcon message="规则版本已变化，当前结果可能已过期，请重新入组。" /> : null}
-      <div className="two-column">
-        <section className="content-band">
+      <div className="two-column drg-workspace">
+        <section className="content-band is-input">
           <Space direction="vertical" size={18} style={{ width: '100%' }}>
             <div>
               <Typography.Text strong>规则版本</Typography.Text>
@@ -112,7 +112,7 @@ export function DRGGrouping() {
             </div>
           </Space>
         </section>
-        <section className="content-band">
+        <section className="content-band is-result">
           <GroupingResultPanel response={currentResult} />
         </section>
       </div>
