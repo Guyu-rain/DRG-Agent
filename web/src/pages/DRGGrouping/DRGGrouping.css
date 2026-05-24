@@ -1,20 +1,141 @@
-.drg-input-actions {
+/* ============================================================
+   DRG 入组工作台 — workspace polish
+   ============================================================ */
+
+/* The two-column workspace gets a slightly tighter gutter and an
+   editorial divider effect between the input and the result. */
+.drg-workspace.two-column {
+  gap: 28px;
+  position: relative;
+}
+
+.drg-workspace .content-band {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
+  flex-direction: column;
+  min-height: 520px;
+}
+
+/* Left "input" panel keeps the pristine paper feel */
+.drg-workspace .content-band.is-input {
+  background: var(--surface);
+}
+
+/* Right "result" panel takes a faintly washed tint, signalling
+   "this is the computed reading" — like an editor's marked-up proof. */
+.drg-workspace .content-band.is-result {
+  background:
+    linear-gradient(180deg, rgba(251, 249, 243, 0.92), rgba(247, 244, 236, 0.65)),
+    var(--surface);
+  border-color: var(--rule);
+}
+
+/* Eyebrow ribbon at the top of each panel — pure CSS so no JSX edit needed */
+.drg-workspace .content-band.is-input::before,
+.drg-workspace .content-band.is-result::before {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.drg-workspace .content-band.is-input::before {
+  content: 'Folio 01 · 病案输入';
+}
+
+.drg-workspace .content-band.is-result::before {
+  content: 'Folio 02 · 入组结果与证据';
+}
+
+/* Parsed case sub-panel */
+.parsed-case-panel.muted-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), transparent),
+    var(--paper-2);
+  border-color: var(--rule-soft);
+  position: relative;
+  padding-top: 18px;
+}
+
+.parsed-case-panel.muted-panel::before {
+  content: '解析草本 · Parsed';
+  position: absolute;
+  top: -10px;
+  left: 16px;
+  padding: 0 8px;
+  background: var(--paper-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
 }
 
 .parsed-case-panel .ant-descriptions-item-label {
   width: 112px;
+  color: var(--ink-mute) !important;
 }
 
+.parsed-case-panel .ant-descriptions-item-content {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* Action row at the bottom of the input panel */
+.drg-input-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: auto;
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--rule-soft);
+}
+
+/* Result summary card — set apart with a sage rule on top */
 .result-summary-card {
-  border-color: #cfe0f1;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--rule) !important;
+  border-top: 2px solid var(--sage) !important;
+  box-shadow: var(--shadow-card) !important;
 }
 
+.result-summary-card .ant-card-body {
+  padding: 22px 24px;
+}
+
+/* Forms inside the structured editor */
 .structured-form .ant-form-item {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.structured-form .ant-form-item-label > label {
+  font-family: var(--font-mono);
+  font-size: 11px !important;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute) !important;
+}
+
+/* Tabs inside the case input switcher */
+.drg-workspace .ant-radio-group,
+.drg-workspace .ant-segmented {
+  --seg-bg: var(--paper-3);
+  background: var(--paper-3) !important;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  padding: 2px;
+}
+
+.drg-workspace .ant-segmented-item-selected {
+  background: var(--surface) !important;
+  box-shadow: 0 1px 0 rgba(28, 30, 34, 0.04);
 }
