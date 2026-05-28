@@ -1,4 +1,5 @@
-"""DRG-Agent FastAPI 应用入口。
+"""
+DRG-Agent FastAPI 应用入口。
 
 启动: cd server && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 """
