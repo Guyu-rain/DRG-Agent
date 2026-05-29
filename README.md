@@ -49,12 +49,11 @@ DRG-Agent/
 
 | 工具 | 用途 | 安装方式 |
 |------|------|----------|
-| **fnm** | Node.js 版本管理 | `brew install fnm` (macOS) / `winget install Schniz.fnm` (Windows) |
-| **mise** | Python/Java 版本管理 | `brew install mise` (macOS/Linux) |
+| **mise** | Node.js / Python 版本管理 | `brew install mise` (macOS/Linux) |
 | **uv** | Python 包管理 + venv | `brew install uv` (macOS) / `pip install uv` |
 | **Docker Desktop** | PostgreSQL + Redis 服务 | [docker.com](https://www.docker.com/products/docker-desktop/) |
 
-> **Windows 用户**: 推荐通过 WSL2 使用 mise，或使用 mise 的 Windows 原生支持。fnm 和 Docker Desktop 均原生支持 Windows。
+> **Windows 用户**: 推荐通过 WSL2 使用 mise，或使用 mise 的 Windows 原生支持。Docker Desktop 原生支持 Windows。
 
 ### 首次准备
 
@@ -63,9 +62,8 @@ DRG-Agent/
 git clone <repo-url>
 cd DRG-Agent
 
-# 2. 安装运行时 (Node.js 22 + Python 3.12)
-fnm install 22 && fnm use 22       # Node.js 22 LTS
-mise install && mise trust         # Python 3.12 (读取 .mise.toml)
+# 2. 安装运行时 (Node.js 24 + Python 3.12)
+mise install && mise trust         # Node.js 24 + Python 3.12 (读取 .mise.toml)
 
 # 3. 启用 pnpm (通过 corepack)
 corepack enable
@@ -122,8 +120,7 @@ cd web && corepack pnpm dev
 
 | 文件 | 作用 |
 |------|------|
-| `.node-version` | 指定 Node.js 版本，fnm 自动切换 |
-| `.mise.toml` | 指定 Python 版本，mise 自动切换 |
+| `.mise.toml` | 指定 Node.js / Python 版本，mise 自动切换 |
 | `package.json` | `packageManager` 字段锁定 pnpm 版本 |
 | `pyproject.toml` | Python 依赖声明，`uv.lock` 锁定精确版本 |
 | `docker-compose.yml` | 锁定 PostgreSQL 16 + Redis 7 镜像版本 |
