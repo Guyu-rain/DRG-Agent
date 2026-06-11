@@ -2,6 +2,7 @@ import { ExportOutlined, PlayCircleOutlined, SendOutlined } from '@ant-design/ic
 import { Button, Checkbox, Descriptions, Drawer, Form, InputNumber, Select, Space, Table, Tag, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/Common/PageHeader';
+import { RuleVersionSelector } from '@/pages/DRGGrouping/components/RuleVersionSelector';
 import { testcasesApi } from '@/services';
 import { useTestcaseStore } from '@/stores/testcaseStore';
 import type { ScenarioType, TestCaseItem, TestPriority } from '@/types/testcase';
@@ -12,14 +13,20 @@ export function TestCase() {
   const { testcases, isGenerating, generateTestcases, fetchTestcases, setFilter } = useTestcaseStore();
   const [selected, setSelected] = useState<string[]>([]);
   const [detail, setDetail] = useState<TestCaseItem | null>(null);
+  const [selectedRuleVersion, setSelectedRuleVersion] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchTestcases();
   }, [fetchTestcases]);
 
   const generate = async (values: { scenarioTypes: ScenarioType[]; maxCount: number; mdc: string }) => {
+    const ruleVersionId = selectedRuleVersion;
+    if (!ruleVersionId) {
+      message.error('请先选择规则版本');
+      return;
+    }
     const taskId = await generateTestcases({
-      ruleVersionId: 'RV-20260519-001',
+      ruleVersionId,
       scenarioTypes: values.scenarioTypes,
       scope: { mdcList: [values.mdc], includeAllRules: false },
       maxCount: values.maxCount,
@@ -39,7 +46,7 @@ export function TestCase() {
             onFinish={(values) => void generate(values)}
           >
             <Form.Item label="规则版本" name="ruleVersionId">
-              <Select defaultValue="RV-20260519-001" options={[{ value: 'RV-20260519-001', label: 'DRG 2.0 演示规则' }]} />
+              <RuleVersionSelector value={selectedRuleVersion} onChange={setSelectedRuleVersion} />
             </Form.Item>
             <Form.Item label="场景类型" name="scenarioTypes">
               <Checkbox.Group
