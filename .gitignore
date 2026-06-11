@@ -57,3 +57,10 @@ server/documents/
 
 # Runtime PID files
 .run/
+
+# DRG file
+file/
+.file/
+
+# claude
+.claude/
