@@ -46,7 +46,7 @@ export function GroupingResultPanel({ response }: GroupingResultPanelProps) {
         <CandidateRules candidates={response.result.candidateRules} />
       </div>
       <Divider />
-      <ActionButtons />
+      <ActionButtons result={response} />
     </div>
   );
 }

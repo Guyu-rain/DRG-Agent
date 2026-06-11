@@ -155,3 +155,14 @@ class TaskService:
                     await self.db.flush()
                 return {"taskId": task_id, "status": task.status}
         raise NotFoundException(ErrorCode.TASK_NOT_FOUND, f"任务不存在: {task_id}")
+
+    async def submit_for_review(self, task_id: str) -> dict:
+        """提交分组任务复核 (将 completed 状态改为 needs_review)。"""
+        task = await self.db.get(GroupingTask, task_id)
+        if task is None:
+            raise NotFoundException(ErrorCode.TASK_NOT_FOUND, f"分组任务不存在: {task_id}")
+        if task.status != "completed":
+            raise BadRequestException(ErrorCode.RESOURCE_IN_USE, "仅已完成的任务可提交复核")
+        task.status = "needs_review"
+        await self.db.flush()
+        return {"taskId": task_id, "status": task.status}

@@ -30,3 +30,26 @@ async def test_logs_endpoint(seeded_client):
     resp = await seeded_client.get("/api/v1/logs")
     assert resp.status_code == 200
     assert resp.json()["data"]["total"] >= 1
+
+
+async def test_submit_review_completed_task(seeded_client):
+    """将已完成的入组任务提交复核。"""
+    items = (await seeded_client.get("/api/v1/cases?pageSize=20")).json()["data"]["items"]
+    exec_resp = await seeded_client.post("/api/v1/grouping/execute", json={"caseId": items[0]["caseId"]})
+    task_id = exec_resp.json()["data"]["taskId"]
+
+    resp = await seeded_client.post(f"/api/v1/tasks/{task_id}/review")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["status"] == "needs_review"
+
+
+async def test_submit_review_not_found(client):
+    """提交不存在的任务复核应返回 404。"""
+    resp = await client.post("/api/v1/tasks/TASK-NOPE/review")
+    assert resp.status_code == 404
+
+
+async def test_submit_review_non_grouping_task_fails(seeded_client):
+    """非分组任务提交复核应返回 404。"""
+    resp = await seeded_client.post("/api/v1/tasks/DOC-TASK-NOPE/review")
+    assert resp.status_code == 404

@@ -1,12 +1,14 @@
 import { create } from 'zustand';
-import { casesApi, groupingApi } from '@/services';
+import { casesApi, groupingApi, documentsApi, testcasesApi, tasksApi } from '@/services';
 import type { CaseCreateRequest, PatientCase, ParsedCaseData } from '@/types/case';
 import type { GroupingResultResponse, GroupingTaskSummary } from '@/types/grouping';
+import type { DocumentGenerateRequest } from '@/types/document';
 
 interface GroupingState {
   currentCaseId: string | null;
   currentCase: PatientCase | null;
   currentResult: GroupingResultResponse | null;
+  currentTaskId: string | null;
   selectedRuleVersion: string | null;
   inputMode: 'text' | 'structured';
   isExecuting: boolean;
@@ -20,12 +22,16 @@ interface GroupingState {
   fetchResult: (taskId: string) => Promise<void>;
   fetchHistory: () => Promise<void>;
   clearResult: () => void;
+  submitForReview: () => Promise<void>;
+  generateDocument: (docType: DocumentGenerateRequest['docType']) => Promise<string>;
+  generateTestcases: () => Promise<string>;
 }
 
 export const useGroupingStore = create<GroupingState>((set, get) => ({
   currentCaseId: null,
   currentCase: null,
   currentResult: null,
+  currentTaskId: null,
   selectedRuleVersion: null,
   inputMode: 'text',
   isExecuting: false,
@@ -69,7 +75,9 @@ export const useGroupingStore = create<GroupingState>((set, get) => ({
     set({ isExecuting: true, currentResult: null });
     try {
       const response = await groupingApi.execute({ caseId: currentCaseId, ruleVersionId: selectedRuleVersion });
-      return response.data.taskId;
+      const taskId = response.data.taskId;
+      set({ currentTaskId: taskId });
+      return taskId;
     } finally {
       set({ isExecuting: false });
     }
@@ -82,5 +90,41 @@ export const useGroupingStore = create<GroupingState>((set, get) => ({
     const response = await groupingApi.tasks({ page: 1, pageSize: 10 });
     set({ history: response.data.items });
   },
-  clearResult: () => set({ currentResult: null }),
+  clearResult: () => set({ currentResult: null, currentTaskId: null }),
+  submitForReview: async () => {
+    const { currentTaskId } = get();
+    if (!currentTaskId) throw new Error('无当前入组任务');
+    await tasksApi.review(currentTaskId);
+  },
+  generateDocument: async (docType) => {
+    const { currentTaskId, currentResult, currentCase } = get();
+    if (!currentTaskId || !currentResult?.result) throw new Error('请先完成入组');
+    const res = await documentsApi.generate({
+      docType,
+      title: `DRG入组报告 - ${currentResult.result.drg?.code ?? ''} ${currentResult.result.drg?.name ?? ''}`,
+      context: {
+        taskId: currentTaskId,
+        mdc: currentResult.result.mdc,
+        adrg: currentResult.result.adrg,
+        drg: currentResult.result.drg,
+        complication: currentResult.result.complication,
+        explanation: currentResult.result.explanation,
+        caseId: currentResult.caseId,
+        primaryDiagnosis: currentCase?.primaryDiagnosis ?? null,
+      },
+    });
+    return res.data.docTaskId;
+  },
+  generateTestcases: async () => {
+    const { selectedRuleVersion, currentCaseId } = get();
+    if (!selectedRuleVersion) throw new Error('请先选择规则版本');
+    const res = await testcasesApi.generate({
+      ruleVersionId: selectedRuleVersion,
+      scenarioTypes: ['normal', 'boundary', 'abnormal'],
+      scope: { includeAllRules: false },
+      sampleCaseIds: currentCaseId ? [currentCaseId] : [],
+      maxCount: 10,
+    });
+    return res.data.testTaskId;
+  },
 }));

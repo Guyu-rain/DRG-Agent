@@ -63,4 +63,4 @@ file/
 .file/
 
 # claude
-.claude/
+.claude/server/data/rules/import_*.json

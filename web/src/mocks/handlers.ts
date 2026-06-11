@@ -306,6 +306,7 @@ export const handlers = [
     }),
   ),
   http.post(`${api}/tasks/:taskId/cancel`, ({ params }) => ok({ taskId: String(params.taskId), status: 'failed' })),
+  http.post(`${api}/tasks/:taskId/review`, ({ params }) => ok({ taskId: String(params.taskId), status: 'needs_review' })),
   http.get(`${api}/logs`, ({ request }) => {
     const { page, pageSize } = parsePaging(request);
     return ok(paged(logs, page, pageSize));

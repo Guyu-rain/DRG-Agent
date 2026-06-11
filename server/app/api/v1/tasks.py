@@ -34,3 +34,9 @@ async def get_task(task_id: str, db: AsyncSession = Depends(get_db)) -> dict:
 async def cancel_task(task_id: str, db: AsyncSession = Depends(get_db)) -> dict:
     service = TaskService(db)
     return ok(await service.cancel_task(task_id), message="任务已取消")
+
+
+@router.post("/{task_id}/review", summary="提交复核")
+async def submit_review(task_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    service = TaskService(db)
+    return ok(await service.submit_for_review(task_id), message="已提交复核")
