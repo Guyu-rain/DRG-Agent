@@ -20,7 +20,7 @@
 | 异步任务 | Celery + Redis | 5.x / 7.x | 文档生成/测试生成等耗时任务异步化 |
 | 文件存储 | 本地文件系统 + JSON 索引 | - | 课程演示场景无需外部存储服务 |
 | 日志 | Loguru | 0.7+ | Python 日志库，简洁易用 |
-| 测试 | Pytest + Playwright | 8.x / 1.x | 后端单元/集成测试 + 前端 E2E 测试 |
+| 测试 | Pytest + Vitest + Testing Library | 8.x / 3.x / 16.x | 后端单元/集成测试 + 前端组件与状态测试 |
 | 代码质量 | Ruff + Mypy | 0.5+ / 1.x | 快速 lint + 类型检查 |
 
 ---

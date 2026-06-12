@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import ConflictException, ErrorCode, NotFoundException
+from app.core.exceptions import BadRequestException, ConflictException, ErrorCode, NotFoundException
 from app.core.logging import logger
 from app.engine.rule_parser import build_rule_index, count_rules, parse_rule_file
 from app.models import GroupingTask, RuleVersion, utcnow
@@ -112,6 +112,17 @@ class RuleService:
             config.active_rule_version_id = version_id
         logger.info(f"规则版本已激活: {version_id}")
         return target
+
+    async def rename_version(self, version_id: str, version_name: str) -> RuleVersion:
+        """重命名规则版本，不改变版本 ID、状态或规则内容。"""
+        version = await self.get_version(version_id)
+        normalized_name = version_name.strip()
+        if not normalized_name:
+            raise BadRequestException(ErrorCode.REQUIRED_FIELD_MISSING, "规则版本名称不能为空")
+        version.version_name = normalized_name
+        await self.db.flush()
+        logger.info(f"规则版本已重命名: {version_id} -> {normalized_name}")
+        return version
 
     async def delete_version(self, version_id: str) -> None:
         """删除规则版本。活跃版本或被入组任务引用的版本不可删除。"""

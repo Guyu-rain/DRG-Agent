@@ -751,7 +751,6 @@ pnpm typecheck   # tsc --noEmit
 2. **响应式适配**: 移动端和平板适配 (当前仅针对桌面端 1440px+)
 3. **暗色模式**: 添加 Ant Design 暗色主题切换
 4. **国际化 i18n**: 使用 `react-intl` 支持中英文切换
-5. **E2E 测试**: 使用 Playwright 录制完整的用户操作流程
-6. **性能优化**: React.lazy + Suspense 代码分割，减少首屏加载时间
-7. **可访问性**: 添加 ARIA label，支持键盘导航
-8. **前端监控**: 集成 Sentry 或自定义错误上报
+5. **性能优化**: React.lazy + Suspense 代码分割，减少首屏加载时间
+6. **可访问性**: 添加 ARIA label，支持键盘导航
+7. **前端监控**: 集成 Sentry 或自定义错误上报

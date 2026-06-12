@@ -7,8 +7,10 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ErrorCode, NotFoundException
-from app.models import DocumentTask, GroupingTask, TaskStep, TestTask
+from app.core.config import settings
+from app.core.exceptions import BadRequestException, ErrorCode, NotFoundException
+from app.core.logging import logger
+from app.models import DocumentTask, GroupingTask, TaskStep, TestTask, utcnow
 
 
 def _duration_ms(started: datetime | None, finished: datetime | None) -> int | None:
@@ -152,7 +154,16 @@ class TaskService:
             if task is not None:
                 if task.status in ("pending", "executing", "running"):
                     task.status = "cancelled"
-                    await self.db.flush()
+                    if hasattr(task, "finished_at"):
+                        task.finished_at = utcnow()
+                    await self.db.commit()
+                    if model in (DocumentTask, TestTask) and not settings.TASKS_EAGER:
+                        from app.tasks import celery_app
+
+                        try:
+                            celery_app.control.revoke(task_id, terminate=True)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(f"任务已标记取消，但 Celery revoke 发送失败 {task_id}: {exc}")
                 return {"taskId": task_id, "status": task.status}
         raise NotFoundException(ErrorCode.TASK_NOT_FOUND, f"任务不存在: {task_id}")
 

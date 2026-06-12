@@ -1,12 +1,10 @@
-import {
-  ExperimentOutlined,
-  FileTextOutlined,
-  SendOutlined,
-} from '@ant-design/icons';
+import { DownloadOutlined, SendOutlined } from '@ant-design/icons';
 import { Button, message, Space } from 'antd';
 import { useState } from 'react';
 import { useGroupingStore } from '@/stores/groupingStore';
 import type { GroupingResultResponse } from '@/types/grouping';
+import { downloadJson } from '@/utils/download';
+import { buildGroupingResultExport } from '@/utils/groupingData';
 
 interface ActionButtonsProps {
   result: GroupingResultResponse;
@@ -14,9 +12,7 @@ interface ActionButtonsProps {
 
 export function ActionButtons({ result }: ActionButtonsProps) {
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [docLoading, setDocLoading] = useState(false);
-  const [testLoading, setTestLoading] = useState(false);
-  const { submitForReview, generateDocument, generateTestcases } = useGroupingStore();
+  const { currentCase, submitForReview } = useGroupingStore();
 
   const handleReview = async () => {
     setReviewLoading(true);
@@ -30,27 +26,13 @@ export function ActionButtons({ result }: ActionButtonsProps) {
     }
   };
 
-  const handleGenerateDoc = async () => {
-    setDocLoading(true);
+  const handleSaveResult = () => {
     try {
-      const taskId = await generateDocument('requirements');
-      message.success(`文档生成任务已创建：${taskId}`);
+      if (!currentCase) throw new Error('当前病历信息不存在');
+      downloadJson(buildGroupingResultExport(result, currentCase), `drg_result_${result.taskId}.json`);
+      message.success('入组结果已保存');
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '文档生成失败');
-    } finally {
-      setDocLoading(false);
-    }
-  };
-
-  const handleGenerateTest = async () => {
-    setTestLoading(true);
-    try {
-      const taskId = await generateTestcases();
-      message.success(`测试用例生成任务已创建：${taskId}`);
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : '测试用例生成失败');
-    } finally {
-      setTestLoading(false);
+      message.error(e instanceof Error ? e.message : '入组结果保存失败');
     }
   };
 
@@ -67,20 +49,11 @@ export function ActionButtons({ result }: ActionButtonsProps) {
         提交复核
       </Button>
       <Button
-        icon={<FileTextOutlined />}
-        loading={docLoading}
+        icon={<DownloadOutlined />}
         disabled={!hasResult}
-        onClick={handleGenerateDoc}
+        onClick={handleSaveResult}
       >
-        生成文档
-      </Button>
-      <Button
-        icon={<ExperimentOutlined />}
-        loading={testLoading}
-        disabled={!hasResult}
-        onClick={handleGenerateTest}
-      >
-        生成测试
+        保存结果
       </Button>
     </Space>
   );

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { documentsApi } from '@/services';
 import type { DocumentDetail, DocumentGenerateRequest, DocumentStatus, DocumentSummary, DocType } from '@/types/document';
+import { waitForTask } from '@/utils/taskPolling';
 
 interface DocumentState {
   documents: DocumentSummary[];
@@ -39,6 +40,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
   generateDocument: async (data) => {
     const response = await documentsApi.generate(data);
+    await waitForTask(async () => (await documentsApi.task(response.data.docTaskId)).data);
     await get().fetchDocuments();
     return response.data.docTaskId;
   },

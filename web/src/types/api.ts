@@ -25,6 +25,6 @@ export interface SimpleListResponse<T> {
   total: number;
 }
 
-export type TaskStatus = 'pending' | 'executing' | 'running' | 'completed' | 'failed' | 'needs_review';
+export type TaskStatus = 'pending' | 'executing' | 'running' | 'completed' | 'failed' | 'cancelled' | 'needs_review';
 
 export type StatusTone = 'success' | 'processing' | 'warning' | 'error' | 'default';

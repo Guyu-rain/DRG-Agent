@@ -7,6 +7,7 @@ export const testcases: TestCaseItem[] = [
     scenarioType: 'normal',
     priority: 'high',
     requirementRef: 'FR-D-05',
+    ruleVersion: 'RV-20260519-001',
     inputCase: {
       primaryDiagnosis: 'A01.002+G01*',
       secondaryDiagnoses: ['J96.0'],
@@ -22,6 +23,7 @@ export const testcases: TestCaseItem[] = [
     scenarioType: 'boundary',
     priority: 'medium',
     requirementRef: 'FR-D-06',
+    ruleVersion: 'RV-20260519-001',
     inputCase: { primaryDiagnosis: 'I10', secondaryDiagnoses: ['I10'] },
     expectedResult: { complication: 'NONE' },
     isPassed: null,
@@ -33,6 +35,7 @@ export const testcases: TestCaseItem[] = [
     scenarioType: 'abnormal',
     priority: 'high',
     requirementRef: 'FR-D-07',
+    ruleVersion: 'RV-20260519-001',
     inputCase: { primaryDiagnosis: null },
     expectedResult: { isGrouped: false, stage: 'mdc_matching' },
     isPassed: false,

@@ -57,3 +57,11 @@ class TestSubmitRequest(CamelModel):
     test_case_ids: list[str]
     doc_title: str = "DRG-Agent 测试文档"
     doc_type: str = "testing"
+
+
+class TestExecutionResponse(CamelModel):
+    test_case_id: str
+    actual_result: dict[str, Any]
+    expected_result: dict[str, Any]
+    is_passed: bool
+    executed_at: Any | None = None

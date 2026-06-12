@@ -62,6 +62,9 @@ server/documents/
 file/
 .file/
 
+# Example cases (generated from scripts, not source)
+example/
+
 # claude
 .claude/server/data/rules/import_*.json
 scripts/

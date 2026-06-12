@@ -11,6 +11,9 @@ export function RuleManagement() {
   const [versions, setVersions] = useState<RuleVersionSummary[]>([]);
   const [detail, setDetail] = useState<RuleVersionDetail | null>(null);
   const [matches, setMatches] = useState<RuleSearchMatch[]>([]);
+  const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
+  const [editingVersionName, setEditingVersionName] = useState('');
+  const [renamingVersionId, setRenamingVersionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const response = await rulesApi.versions();
@@ -52,6 +55,59 @@ export function RuleManagement() {
     setMatches(response.data.matches);
   };
 
+  const removeVersion = async (versionId: string) => {
+    await rulesApi.remove(versionId);
+    if (detail?.versionId === versionId) setDetail(null);
+    message.success('规则版本已删除');
+    await load();
+  };
+
+  const startRename = (record: RuleVersionSummary) => {
+    setEditingVersionId(record.versionId);
+    setEditingVersionName(record.versionName);
+  };
+
+  const commitRename = async (record: RuleVersionSummary) => {
+    const versionName = editingVersionName.trim();
+    if (!versionName) {
+      message.warning('规则版本名称不能为空');
+      setEditingVersionName(record.versionName);
+      return;
+    }
+    if (versionName === record.versionName) {
+      setEditingVersionId(null);
+      return;
+    }
+
+    const applyName = (name: string) => {
+      setVersions((items) =>
+        items.map((item) => (item.versionId === record.versionId ? { ...item, versionName: name } : item)),
+      );
+      setDetail((current) =>
+        current?.versionId === record.versionId ? { ...current, versionName: name } : current,
+      );
+    };
+
+    setEditingVersionId(null);
+    applyName(versionName);
+    setRenamingVersionId(record.versionId);
+    try {
+      const response = await rulesApi.rename(record.versionId, versionName);
+      const renamed = response.data;
+      setVersions((items) => items.map((item) => (item.versionId === renamed.versionId ? renamed : item)));
+      setDetail((current) =>
+        current?.versionId === renamed.versionId ? { ...current, versionName: renamed.versionName } : current,
+      );
+      message.success('规则版本已重命名');
+    } catch {
+      applyName(record.versionName);
+      setEditingVersionName(record.versionName);
+      setEditingVersionId(record.versionId);
+    } finally {
+      setRenamingVersionId(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -79,7 +135,38 @@ export function RuleManagement() {
           dataSource={versions}
           pagination={false}
           columns={[
-            { title: '版本', dataIndex: 'versionName' },
+            {
+              title: '版本',
+              dataIndex: 'versionName',
+              render: (_, record) =>
+                editingVersionId === record.versionId ? (
+                  <Input
+                    autoFocus
+                    aria-label={`重命名规则版本 ${record.versionName}`}
+                    value={editingVersionName}
+                    disabled={renamingVersionId === record.versionId}
+                    maxLength={200}
+                    onChange={(event) => setEditingVersionName(event.target.value)}
+                    onBlur={() => void commitRename(record)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void commitRename(record);
+                      }
+                    }}
+                  />
+                ) : (
+                  <Button
+                    type="text"
+                    size="small"
+                    title="点击重命名"
+                    style={{ height: 'auto', padding: 0, whiteSpace: 'normal', textAlign: 'left' }}
+                    onClick={() => startRename(record)}
+                  >
+                    {record.versionName}
+                  </Button>
+                ),
+            },
             {
               title: '状态',
               dataIndex: 'status',
@@ -113,7 +200,7 @@ export function RuleManagement() {
                     </Button>
                   ) : null}
                   {!record.isActive ? (
-                    <Popconfirm title="删除非活跃规则版本？" onConfirm={() => void rulesApi.remove(record.versionId)}>
+                    <Popconfirm title="删除非活跃规则版本？" onConfirm={() => void removeVersion(record.versionId)}>
                       <Button size="small" danger icon={<DeleteOutlined />} />
                     </Popconfirm>
                   ) : null}

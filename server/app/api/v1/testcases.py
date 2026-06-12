@@ -19,11 +19,19 @@ router = APIRouter(prefix="/testcases", tags=["测试用例"])
 @router.post("/generate", status_code=202, summary="生成测试用例")
 async def generate_testcases(payload: TestGenRequest, db: AsyncSession = Depends(get_db)) -> dict:
     service = TestCaseService(db)
-    task = await service.generate_testcases(payload.model_dump())
+    task = await service.create_generation_task(payload.model_dump())
+    await db.commit()
+    if settings.TASKS_EAGER:
+        await service.run_generation(task)
+        await db.commit()
+    else:
+        from app.tasks.testcase_tasks import generate_testcases_task
+
+        generate_testcases_task.apply_async(args=[task.id], task_id=task.id)
     return ok(
         {"testTaskId": task.id, "status": task.status, "createdAt": task.created_at,
          "generatedCount": task.generated_count},
-        message="测试用例生成任务已完成",
+        message="测试用例生成任务已创建",
         code=202,
     )
 
@@ -38,10 +46,20 @@ async def export_testcases(payload: TestExportRequest, db: AsyncSession = Depend
 @router.post("/submit-to-documents", summary="提交测试用例到文档系统")
 async def submit_to_documents(payload: TestSubmitRequest, db: AsyncSession = Depends(get_db)) -> dict:
     service = TestCaseService(db)
-    doc_task_id = await service.submit_to_documents(
+    task = await service.create_document_task(
         payload.test_case_ids, payload.doc_title, payload.doc_type
     )
-    return ok({"docTaskId": doc_task_id}, message="测试用例已提交到文档系统")
+    await db.commit()
+    if settings.TASKS_EAGER:
+        from app.services.document_service import DocumentService
+
+        await DocumentService(db).run_generation(task)
+        await db.commit()
+    else:
+        from app.tasks.document_tasks import generate_document_task
+
+        generate_document_task.apply_async(args=[task.id], task_id=task.id)
+    return ok({"docTaskId": task.id}, message="测试用例已提交到文档系统")
 
 
 @router.get("/tasks/{test_task_id}", summary="查询测试用例生成状态")
@@ -84,3 +102,16 @@ async def get_testcase(test_case_id: str, db: AsyncSession = Depends(get_db)) ->
     service = TestCaseService(db)
     tc = await service.get_testcase(test_case_id)
     return ok(service.to_detail(tc))
+
+
+@router.post("/{test_case_id}/execute", summary="执行单个测试用例")
+async def execute_testcase(test_case_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    service = TestCaseService(db)
+    tc = await service.execute_testcase(test_case_id)
+    return ok({
+        "testCaseId": tc.id,
+        "actualResult": tc.actual_result,
+        "expectedResult": tc.expected_result,
+        "isPassed": tc.is_passed,
+        "executedAt": tc.executed_at,
+    }, message="测试用例执行完成")

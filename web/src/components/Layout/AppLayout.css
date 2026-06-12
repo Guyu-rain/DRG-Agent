@@ -7,6 +7,11 @@
   background: transparent;
 }
 
+.app-shell > .ant-layout,
+.app-content {
+  min-width: 0;
+}
+
 /* ===== Sidebar ===== */
 .app-sider {
   position: relative;
@@ -339,7 +344,18 @@
 }
 
 @media (max-width: 720px) {
+  .app-content {
+    padding: 18px 12px 28px;
+  }
+  .app-header {
+    padding-inline: 10px;
+  }
   .app-crumbs {
     font-size: 10.5px;
+  }
+  .app-crumbs__root,
+  .app-crumbs__sep,
+  .app-header__right {
+    display: none;
   }
 }

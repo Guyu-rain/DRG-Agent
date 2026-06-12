@@ -82,6 +82,7 @@ html,
 body {
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
 }
 
 body {
@@ -163,6 +164,7 @@ a:hover {
   padding: var(--s-6) var(--s-6);
   box-shadow: var(--shadow-paper);
   transition: box-shadow var(--t-med) var(--ease-out), transform var(--t-med) var(--ease-out);
+  min-width: 0;
 }
 
 .content-band:hover {
@@ -383,6 +385,10 @@ a:hover {
 .ant-table {
   background: transparent !important;
   font-family: var(--font-sans);
+}
+.ant-table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
 }
 .ant-table-thead > tr > th {
   background: transparent !important;

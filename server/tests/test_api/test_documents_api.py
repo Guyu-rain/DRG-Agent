@@ -33,3 +33,28 @@ async def test_list_documents(client):
 async def test_document_not_found(client):
     resp = await client.get("/api/v1/documents/DOC-NOPE")
     assert resp.status_code == 404
+
+
+async def test_download_document_formats(client):
+    doc_id = await _generate_doc(client)
+    expectations = {
+        "markdown": ("text/markdown", f"{doc_id}.md"),
+        "html": ("text/html", f"{doc_id}.html"),
+        "pdf": ("application/pdf", f"{doc_id}.pdf"),
+    }
+
+    for fmt, (content_type, filename) in expectations.items():
+        resp = await client.get(f"/api/v1/documents/{doc_id}/download?format={fmt}")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith(content_type)
+        assert filename in resp.headers["content-disposition"]
+        assert resp.content
+
+    pdf = await client.get(f"/api/v1/documents/{doc_id}/download?format=pdf")
+    assert pdf.content.startswith(b"%PDF-1.4")
+
+
+async def test_download_document_rejects_unknown_format(client):
+    doc_id = await _generate_doc(client)
+    resp = await client.get(f"/api/v1/documents/{doc_id}/download?format=docx")
+    assert resp.status_code == 400

@@ -7,6 +7,7 @@ import { testcasesApi } from '@/services';
 import { useTestcaseStore } from '@/stores/testcaseStore';
 import type { ScenarioType, TestCaseItem, TestPriority } from '@/types/testcase';
 import { priorityLabels, scenarioLabels } from '@/utils/constants';
+import { triggerDownload } from '@/utils/download';
 import { formatDateTime } from '@/utils/format';
 
 export function TestCase() {
@@ -14,6 +15,7 @@ export function TestCase() {
   const [selected, setSelected] = useState<string[]>([]);
   const [detail, setDetail] = useState<TestCaseItem | null>(null);
   const [selectedRuleVersion, setSelectedRuleVersion] = useState<string | null>(null);
+  const [executingId, setExecutingId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchTestcases();
@@ -28,10 +30,49 @@ export function TestCase() {
     const taskId = await generateTestcases({
       ruleVersionId,
       scenarioTypes: values.scenarioTypes,
-      scope: { mdcList: [values.mdc], includeAllRules: false },
+      scope: {
+        mdcList: values.mdc === 'ALL' ? [] : [values.mdc],
+        includeAllRules: values.mdc === 'ALL',
+      },
       maxCount: values.maxCount,
     });
-    message.success(`测试用例生成任务已创建：${taskId}`);
+    message.success(`测试用例生成完成：${taskId}`);
+  };
+
+  const execute = async (testCaseId: string) => {
+    setExecutingId(testCaseId);
+    try {
+      const response = await testcasesApi.execute(testCaseId);
+      await fetchTestcases();
+      const updated = await testcasesApi.detail(testCaseId);
+      setDetail(updated.data);
+      if (response.data.isPassed) {
+        message.success('测试用例执行通过');
+      } else {
+        message.warning('测试用例执行完成，但实际结果与预期不一致');
+      }
+    } finally {
+      setExecutingId(null);
+    }
+  };
+
+  const exportSelected = async () => {
+    if (!selected.length) {
+      message.warning('请先选择要导出的测试用例');
+      return;
+    }
+    const response = await testcasesApi.export(selected);
+    triggerDownload(response.data.downloadUrl);
+    message.success('导出文件已开始下载');
+  };
+
+  const submitSelected = async () => {
+    if (!selected.length) {
+      message.warning('请先选择要提交的测试用例');
+      return;
+    }
+    await testcasesApi.submitToDocuments(selected);
+    message.success('已提交到文档系统');
   };
 
   return (
@@ -42,7 +83,7 @@ export function TestCase() {
           <h3 className="section-title">生成配置</h3>
           <Form
             layout="vertical"
-            initialValues={{ scenarioTypes: ['normal', 'boundary', 'abnormal'], maxCount: 50, mdc: 'MDCB' }}
+            initialValues={{ scenarioTypes: ['normal', 'boundary', 'abnormal'], maxCount: 50, mdc: 'ALL' }}
             onFinish={(values) => void generate(values)}
           >
             <Form.Item label="规则版本" name="ruleVersionId">
@@ -58,7 +99,15 @@ export function TestCase() {
               />
             </Form.Item>
             <Form.Item label="范围" name="mdc">
-              <Select options={[{ value: 'MDCB', label: 'MDCB 神经系统' }]} />
+              <Select
+                options={[
+                  { value: 'ALL', label: '全部规则' },
+                  { value: 'MDCB', label: 'MDCB 神经系统' },
+                  { value: 'MDCE', label: 'MDCE 呼吸系统' },
+                  { value: 'MDCG', label: 'MDCG 消化系统' },
+                  { value: 'MDCH', label: 'MDCH 肝胆胰系统' },
+                ]}
+              />
             </Form.Item>
             <Form.Item label="数量上限" name="maxCount">
               <InputNumber min={1} max={200} style={{ width: '100%' }} />
@@ -80,10 +129,10 @@ export function TestCase() {
               }}
               options={Object.entries(scenarioLabels).map(([value, label]) => ({ value, label }))}
             />
-            <Button icon={<ExportOutlined />} onClick={() => void testcasesApi.export(selected).then(() => message.success('已导出选中用例'))}>
+            <Button icon={<ExportOutlined />} onClick={() => void exportSelected()}>
               导出选中
             </Button>
-            <Button icon={<SendOutlined />} onClick={() => void testcasesApi.submitToDocuments(selected).then(() => message.success('已提交到文档系统'))}>
+            <Button icon={<SendOutlined />} onClick={() => void submitSelected()}>
               提交到文档系统
             </Button>
           </Space>
@@ -108,6 +157,13 @@ export function TestCase() {
                 render: (value: TestPriority) => priorityLabels[value],
               },
               {
+                title: '结果',
+                dataIndex: 'isPassed',
+                width: 90,
+                render: (value: boolean | null | undefined) =>
+                  value == null ? <Tag>未执行</Tag> : value ? <Tag color="green">通过</Tag> : <Tag color="red">失败</Tag>,
+              },
+              {
                 title: '操作',
                 width: 170,
                 render: (_, record) => (
@@ -115,7 +171,12 @@ export function TestCase() {
                     <Button size="small" onClick={() => setDetail(record)}>
                       详情
                     </Button>
-                    <Button size="small" icon={<PlayCircleOutlined />} onClick={() => message.success('测试用例执行完成')}>
+                    <Button
+                      size="small"
+                      icon={<PlayCircleOutlined />}
+                      loading={executingId === record.testCaseId}
+                      onClick={() => void execute(record.testCaseId)}
+                    >
                       执行
                     </Button>
                   </Space>
@@ -137,6 +198,12 @@ export function TestCase() {
             </Descriptions.Item>
             <Descriptions.Item label="预期结果">
               <pre>{JSON.stringify(detail.expectedResult, null, 2)}</pre>
+            </Descriptions.Item>
+            <Descriptions.Item label="实际结果">
+              <pre>{detail.actualResult ? JSON.stringify(detail.actualResult, null, 2) : '尚未执行'}</pre>
+            </Descriptions.Item>
+            <Descriptions.Item label="执行结论">
+              {detail.isPassed == null ? '尚未执行' : detail.isPassed ? '通过' : '失败'}
             </Descriptions.Item>
           </Descriptions>
         ) : null}

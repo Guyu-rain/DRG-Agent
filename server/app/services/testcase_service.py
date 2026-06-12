@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.exceptions import ErrorCode, NotFoundException
 from app.core.logging import logger
-from app.models import TestCase, TestTask, utcnow
+from app.engine.grouping_engine import GroupingEngine
+from app.models import ExecutionLog, TestCase, TestTask, utcnow
 from app.services.rule_service import RuleService, index_from_version, parsed_rules_from_version
 
 
@@ -22,7 +23,13 @@ class TestCaseService:
         self.rule_service = RuleService(db)
 
     async def generate_testcases(self, payload: dict) -> TestTask:
-        """生成测试用例。创建 TestTask 并同步执行测试用例生成工作流。"""
+        """同步生成测试用例，供服务层测试和显式同步调用使用。"""
+        task = await self.create_generation_task(payload)
+        await self.run_generation(task)
+        return task
+
+    async def create_generation_task(self, payload: dict) -> TestTask:
+        """创建待执行的测试用例生成任务。"""
         rule_version_id = payload.get("rule_version_id") or payload.get("ruleVersionId")
         scenario_types = payload.get("scenario_types") or payload.get("scenarioTypes") or [
             "normal", "boundary", "abnormal",
@@ -42,8 +49,17 @@ class TestCaseService:
         )
         self.db.add(task)
         await self.db.flush()
-
-        await self.run_generation(task)
+        self.db.add(ExecutionLog(
+            level="info",
+            agent="testcase_service",
+            task_id=task.id,
+            message="测试用例生成任务已入队",
+            input_summary=str({
+                "scenarioTypes": scenario_types,
+                "scope": scope,
+                "maxCount": max_count,
+            }),
+        ))
         return task
 
     async def run_generation(self, task: TestTask) -> list[TestCase]:
@@ -51,6 +67,7 @@ class TestCaseService:
         from app.agents import get_orchestrator
 
         task.status = "running"
+        await self.db.commit()
         version = None
         if task.rule_version_id:
             version = await self.rule_service.get_version(task.rule_version_id)
@@ -71,6 +88,18 @@ class TestCaseService:
                 version.id, task.scenario_types or [], task.scope or {},
                 task.sample_case_ids or [], task.max_count or 50, rule_index, parsed_rules,
             )
+            await self.db.refresh(task, attribute_names=["status", "finished_at"])
+            if task.status == "cancelled":
+                task.finished_at = task.finished_at or utcnow()
+                self.db.add(ExecutionLog(
+                    level="info",
+                    agent="testcase_service",
+                    task_id=task.id,
+                    message="测试用例生成任务已取消，丢弃生成结果",
+                ))
+                logger.info(f"测试用例生成结果因任务取消被丢弃: {task.id}")
+                return []
+
             generated = state.get("test_cases") or []
             created: list[TestCase] = []
             for item in generated:
@@ -91,14 +120,83 @@ class TestCaseService:
             task.status = "completed"
             task.finished_at = utcnow()
             await self.db.flush()
+            self.db.add(ExecutionLog(
+                level="info",
+                agent="testcase_service",
+                task_id=task.id,
+                message=f"测试用例生成完成: {len(created)} 条",
+                output_summary=str(len(created)),
+            ))
             logger.info(f"测试用例生成完成: {len(created)} 条 <- {task.id}")
             return created
         except Exception as exc:  # noqa: BLE001
+            await self.db.refresh(task, attribute_names=["status", "finished_at"])
+            if task.status == "cancelled":
+                task.finished_at = task.finished_at or utcnow()
+                logger.info(f"测试用例任务取消后结束执行: {task.id}")
+                return []
+
             task.status = "failed"
             task.error_message = str(exc)
             task.finished_at = utcnow()
+            self.db.add(ExecutionLog(
+                level="error",
+                agent="testcase_service",
+                task_id=task.id,
+                message="测试用例生成失败",
+                error_detail=str(exc),
+            ))
             logger.error(f"测试用例生成失败 {task.id}: {exc}")
             raise
+
+    async def execute_testcase(self, test_case_id: str) -> TestCase:
+        """使用测试用例绑定的规则版本执行确定性入组并保存比对结果。"""
+        tc = await self.get_testcase(test_case_id)
+        version = (
+            await self.rule_service.get_version(tc.rule_version_id)
+            if tc.rule_version_id
+            else await self.rule_service.get_active_version()
+        )
+        if version is None:
+            raise NotFoundException(ErrorCode.RULE_VERSION_NOT_FOUND, "没有可用的规则版本")
+
+        result = GroupingEngine(index_from_version(version)).group(tc.input_case or {})
+        actual = self._result_snapshot(result)
+        expected = tc.expected_result or {}
+        tc.actual_result = actual
+        tc.is_passed = self._matches_expected(expected, actual)
+        tc.executed_at = utcnow()
+        self.db.add(ExecutionLog(
+            level="info" if tc.is_passed else "warning",
+            agent="testcase_service",
+            task_id=tc.test_task_id,
+            message=f"测试用例执行{'通过' if tc.is_passed else '失败'}: {tc.id}",
+            input_summary=tc.id,
+            output_summary=str(actual),
+        ))
+        await self.db.flush()
+        return tc
+
+    @staticmethod
+    def _result_snapshot(result: dict) -> dict:
+        if result.get("is_grouped"):
+            return {
+                "isGrouped": True,
+                "mdc": result.get("mdc_code"),
+                "adrg": result.get("adrg_code"),
+                "drg": result.get("drg_code"),
+                "complication": result.get("complication"),
+            }
+        return {
+            "isGrouped": False,
+            "stage": result.get("stage"),
+            "error": result.get("ungrouped_reason"),
+        }
+
+    @staticmethod
+    def _matches_expected(expected: dict, actual: dict) -> bool:
+        keys = ("isGrouped", "mdc", "adrg", "drg", "complication", "stage")
+        return all(expected.get(key) == actual.get(key) for key in keys if key in expected)
 
     async def get_task(self, test_task_id: str) -> TestTask:
         task = await self.db.get(TestTask, test_task_id)
@@ -156,10 +254,10 @@ class TestCaseService:
         logger.info(f"测试用例已导出: {file_path}")
         return f"/api/v1/testcases/export/{export_id}.xlsx"
 
-    async def submit_to_documents(
+    async def create_document_task(
         self, test_case_ids: list[str], doc_title: str, doc_type: str = "testing"
-    ) -> str:
-        """将测试用例汇总并提交到文档系统, 返回文档任务 ID。"""
+    ):
+        """汇总测试用例并创建异步文档任务。"""
         from app.services.document_service import DocumentService
 
         cases_context = []
@@ -171,12 +269,11 @@ class TestCaseService:
                     "expectedResult": tc.expected_result,
                 })
         doc_service = DocumentService(self.db)
-        task = await doc_service.generate_document({
+        return await doc_service.create_generation_task({
             "doc_type": doc_type,
             "title": doc_title,
             "context": {"test_cases": cases_context},
         })
-        return task.id
 
     # --------------------------------------------------------------- 序列化
     @staticmethod
@@ -191,6 +288,9 @@ class TestCaseService:
             "inputCase": tc.input_case,
             "expectedResult": tc.expected_result,
             "expectedExplanation": tc.expected_explanation,
+            "actualResult": tc.actual_result,
+            "isPassed": tc.is_passed,
+            "executedAt": tc.executed_at,
             "createdAt": tc.created_at,
         }
 

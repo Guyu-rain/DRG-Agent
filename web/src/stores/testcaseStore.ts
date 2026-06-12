@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { testcasesApi } from '@/services';
 import type { ScenarioType, TestCaseGenerateRequest, TestCaseItem } from '@/types/testcase';
+import { waitForTask } from '@/utils/taskPolling';
 
 interface TestcaseState {
   testcases: TestCaseItem[];
@@ -26,6 +27,7 @@ export const useTestcaseStore = create<TestcaseState>((set, get) => ({
     set({ isGenerating: true });
     try {
       const response = await testcasesApi.generate(data);
+      await waitForTask(async () => (await testcasesApi.task(response.data.testTaskId)).data);
       await get().fetchTestcases();
       return response.data.testTaskId;
     } finally {

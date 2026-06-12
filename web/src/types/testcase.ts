@@ -15,7 +15,7 @@ export interface TestCaseGenerateRequest {
 
 export interface TestTaskResponse {
   testTaskId: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   createdAt: string;
   generatedCount?: number;
 }
@@ -27,9 +27,19 @@ export interface TestCaseItem {
   scenarioType: ScenarioType;
   priority: TestPriority;
   requirementRef?: string;
+  ruleVersion?: string;
   inputCase: Record<string, unknown>;
   expectedResult: Record<string, unknown>;
   actualResult?: Record<string, unknown>;
   isPassed?: boolean | null;
+  executedAt?: string;
   createdAt: string;
+}
+
+export interface TestExecutionResponse {
+  testCaseId: string;
+  actualResult: Record<string, unknown>;
+  expectedResult: Record<string, unknown>;
+  isPassed: boolean;
+  executedAt: string;
 }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 
@@ -149,7 +150,7 @@ class SystemService:
             components["database"] = "disconnected"
 
         components["redis"] = await self._check_redis()
-        components["celery"] = "running" if components["redis"] == "connected" else "unavailable"
+        components["celery"] = await self._check_celery()
 
         try:
             storage = settings.document_storage_dir
@@ -179,3 +180,17 @@ class SystemService:
             return "connected"
         except Exception:  # noqa: BLE001
             return "disconnected"
+
+    @staticmethod
+    async def _check_celery() -> str:
+        if settings.TASKS_EAGER:
+            return "eager"
+        try:
+            from app.tasks import celery_app
+
+            replies = await asyncio.to_thread(
+                lambda: celery_app.control.inspect(timeout=1).ping()
+            )
+            return "running" if replies else "unavailable"
+        except Exception:  # noqa: BLE001
+            return "unavailable"

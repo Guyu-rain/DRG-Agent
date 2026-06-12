@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.schemas.common import ok
+from app.schemas.rule import RuleVersionRenameRequest
 from app.services.rule_service import RuleService
 
 router = APIRouter(prefix="/rules", tags=["规则管理"])
@@ -65,6 +66,17 @@ async def activate_version(version_id: str, db: AsyncSession = Depends(get_db)) 
     service = RuleService(db)
     version = await service.activate_version(version_id)
     return ok(service.to_summary(version), message="规则版本已激活")
+
+
+@router.patch("/versions/{version_id}", summary="重命名规则版本")
+async def rename_version(
+    version_id: str,
+    payload: RuleVersionRenameRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    service = RuleService(db)
+    version = await service.rename_version(version_id, payload.version_name)
+    return ok(service.to_summary(version), message="规则版本已重命名")
 
 
 @router.delete("/versions/{version_id}", summary="删除规则版本")

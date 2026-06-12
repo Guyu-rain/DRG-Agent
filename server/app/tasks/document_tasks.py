@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from app.core.logging import logger
 from app.tasks import celery_app
+from app.tasks.async_runner import run_async
 
 
-async def _generate(doc_task_id: str) -> None:
+async def _generate(doc_task_id: str) -> str:
     from app.core.database import async_session
     from app.models import DocumentTask
     from app.services.document_service import DocumentService
@@ -17,10 +16,14 @@ async def _generate(doc_task_id: str) -> None:
         task = await db.get(DocumentTask, doc_task_id)
         if task is None:
             logger.error(f"文档任务不存在: {doc_task_id}")
-            return
+            return "missing"
+        if task.status == "cancelled":
+            logger.info(f"文档任务已取消，跳过执行: {doc_task_id}")
+            return "cancelled"
         try:
             await DocumentService(db).run_generation(task)
             await db.commit()
+            return task.status
         except Exception:  # noqa: BLE001
             await db.commit()  # 持久化 failed 状态
             raise
@@ -40,8 +43,8 @@ def generate_document_task(self, doc_task_id: str) -> dict:
     """异步执行文档生成工作流。"""
     logger.info(f"[Celery] 开始文档生成任务: {doc_task_id}")
     try:
-        asyncio.run(_generate(doc_task_id))
-        return {"docTaskId": doc_task_id, "status": "completed"}
+        status = run_async(_generate(doc_task_id))
+        return {"docTaskId": doc_task_id, "status": status}
     except Exception as exc:  # noqa: BLE001
         logger.error(f"[Celery] 文档生成失败 {doc_task_id}: {exc}")
         raise self.retry(exc=exc, countdown=5)
@@ -51,5 +54,5 @@ def generate_document_task(self, doc_task_id: str) -> dict:
 def submit_document_task(doc_id: str) -> dict:
     """异步提交文档到虚拟文档系统。"""
     logger.info(f"[Celery] 提交文档: {doc_id}")
-    asyncio.run(_submit(doc_id))
+    run_async(_submit(doc_id))
     return {"docId": doc_id, "status": "submitted"}

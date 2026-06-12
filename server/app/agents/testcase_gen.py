@@ -39,7 +39,15 @@ def scenario_construct_agent(state: TestGenState) -> dict:
 
     mdc_prefix = {m["code"]: (m.get("icd_prefixes") or [None])[0] for m in rules.get("mdc_list", [])}
     mcc_codes = analysis.get("mcc_codes", [])
+    cc_codes = analysis.get("cc_codes", [])
     surgical = [a for a in analysis.get("adrg_list", []) if a["is_surgical"] and a["surgery_list"]]
+    scope = state.get("scope") or {}
+    mdc_filter = set(scope.get("mdcList") or scope.get("mdc_list") or [])
+    adrg_filter = set(scope.get("adrgList") or scope.get("adrg_list") or [])
+    if mdc_filter:
+        surgical = [a for a in surgical if a["mdc"] in mdc_filter]
+    if adrg_filter:
+        surgical = [a for a in surgical if a["code"] in adrg_filter]
 
     scenarios: list[dict] = []
 
@@ -48,40 +56,41 @@ def scenario_construct_agent(state: TestGenState) -> dict:
             diag = mdc_prefix.get(adrg["mdc"])
             if not diag:
                 continue
-            scenarios.append({
-                "type": "normal",
-                "description": f"正常场景: ADRG={adrg['code']} 手术命中",
-                "input": {
-                    "primaryDiagnosis": {"code": diag, "name": f"{adrg['mdc']} 示例诊断"},
-                    "secondaryDiagnoses": [],
-                    "primaryProcedure": {"code": adrg["surgery_list"][0], "name": "示例手术"},
-                },
-            })
+            for level, secondary in (
+                ("NONE", []),
+                ("CC", [{"code": cc_codes[0], "name": "示例 CC"}] if cc_codes else []),
+                ("MCC", [{"code": mcc_codes[0], "name": "示例 MCC"}] if mcc_codes else []),
+            ):
+                scenarios.append({
+                    "type": "normal",
+                    "description": f"正常场景: ADRG={adrg['code']} 并发症等级 {level}",
+                    "input": {
+                        "primaryDiagnosis": {"code": diag, "name": f"{adrg['mdc']} 示例诊断"},
+                        "secondaryDiagnoses": secondary,
+                        "primaryProcedure": {"code": adrg["surgery_list"][0], "name": "示例手术"},
+                    },
+                })
 
     if "boundary" in scenario_types:
         for adrg in surgical:
             diag = mdc_prefix.get(adrg["mdc"])
             if not diag:
                 continue
-            if mcc_codes:
+            boundary_variants = [
+                ("无次要诊断", []),
+                ("未知次要诊断", [{"code": "Z00.0", "name": "一般检查"}]),
+                ("重复次要诊断", [{"code": cc_codes[0], "name": "示例 CC"}] * 2 if cc_codes else []),
+            ]
+            for label, secondary in boundary_variants:
                 scenarios.append({
                     "type": "boundary",
-                    "description": f"边界场景: ADRG={adrg['code']} 伴 MCC",
+                    "description": f"边界场景: ADRG={adrg['code']} {label}",
                     "input": {
                         "primaryDiagnosis": {"code": diag, "name": "示例诊断"},
-                        "secondaryDiagnoses": [{"code": mcc_codes[0], "name": "示例 MCC"}],
+                        "secondaryDiagnoses": secondary,
                         "primaryProcedure": {"code": adrg["surgery_list"][0], "name": "示例手术"},
                     },
                 })
-            scenarios.append({
-                "type": "boundary",
-                "description": f"边界场景: ADRG={adrg['code']} 无次要诊断",
-                "input": {
-                    "primaryDiagnosis": {"code": diag, "name": "示例诊断"},
-                    "secondaryDiagnoses": [],
-                    "primaryProcedure": {"code": adrg["surgery_list"][0], "name": "示例手术"},
-                },
-            })
 
     if "abnormal" in scenario_types:
         scenarios.extend([
@@ -91,13 +100,26 @@ def scenario_construct_agent(state: TestGenState) -> dict:
              "input": {"primaryDiagnosis": {"code": None, "name": None}}},
             {"type": "abnormal", "description": "编码无法匹配 MDC",
              "input": {"primaryDiagnosis": {"code": "Z99.9", "name": "无法匹配的诊断"}}},
+            {"type": "abnormal", "description": "主要手术编码格式错误",
+             "input": {
+                 "primaryDiagnosis": {"code": "A01.002", "name": "示例诊断"},
+                 "primaryProcedure": {"code": "BAD_PROC", "name": "非法手术"},
+             }},
+            {"type": "abnormal", "description": "次要诊断编码格式错误",
+             "input": {
+                 "primaryDiagnosis": {"code": "A01.002", "name": "示例诊断"},
+                 "secondaryDiagnoses": [{"code": "BAD_DIAG", "name": "非法次要诊断"}],
+             }},
+            {"type": "abnormal", "description": "主诊断仅名称无编码",
+             "input": {"primaryDiagnosis": {"code": None, "name": "仅名称诊断"}}},
+            {"type": "abnormal", "description": "空病历", "input": {}},
         ])
 
     return {"scenarios": scenarios[:max_count]}
 
 
 def testcase_generate_agent(state: TestGenState) -> dict:
-    """根据场景生成测试用例。优先 LLM, 失败时用规则引擎确定性生成。"""
+    """生成测试用例；输入与预期结果始终由确定性规则引擎给出。"""
     scenarios = state.get("scenarios") or []
     analysis = state.get("rule_analysis") or {}
     llm = state.get("llm_client")
@@ -113,8 +135,13 @@ def testcase_generate_agent(state: TestGenState) -> dict:
             )
             output = llm.call(prompt)
             parsed = parse_llm_json_output(output)
-            if isinstance(parsed, list) and parsed:
-                return {"test_cases": parsed, "status": "completed"}
+            if isinstance(parsed, list):
+                for item, suggestion in zip(deterministic, parsed):
+                    if isinstance(suggestion, dict):
+                        item["title"] = suggestion.get("title") or item["title"]
+                        item["expectedExplanation"] = (
+                            suggestion.get("expectedExplanation") or item["expectedExplanation"]
+                        )
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"测试用例 LLM 生成失败, 改用规则引擎: {exc}")
 
@@ -138,15 +165,23 @@ def _deterministic_testcases(scenarios: list[dict], rule_index: dict) -> list[di
         input_case = scenario.get("input", {})
         expected: dict = {}
         explanation = scenario.get("description", "")
-        if engine and scenario_type != "abnormal":
+        if engine:
             try:
                 result = engine.group(input_case)
-                expected = {
-                    "mdc": result.get("mdc_code"),
-                    "adrg": result.get("adrg_code"),
-                    "drg": result.get("drg_code"),
-                    "complication": result.get("complication"),
-                }
+                if result.get("is_grouped"):
+                    expected = {
+                        "isGrouped": True,
+                        "mdc": result.get("mdc_code"),
+                        "adrg": result.get("adrg_code"),
+                        "drg": result.get("drg_code"),
+                        "complication": result.get("complication"),
+                    }
+                else:
+                    expected = {
+                        "isGrouped": False,
+                        "stage": result.get("stage"),
+                        "error": result.get("ungrouped_reason"),
+                    }
             except Exception:  # noqa: BLE001
                 expected = {}
         cases.append({

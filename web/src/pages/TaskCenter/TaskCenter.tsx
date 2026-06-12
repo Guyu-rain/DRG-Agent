@@ -1,6 +1,7 @@
-import { Button, Card, Col, Drawer, Row, Select, Space, Statistic, Table, Tag, Typography } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { Button, Card, Col, Drawer, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/Common/PageHeader';
+import { usePolling } from '@/hooks/usePolling';
 import { tasksApi } from '@/services';
 import { useTaskStore } from '@/stores/taskStore';
 import type { TaskStep, TaskSummary } from '@/types/task';
@@ -14,6 +15,10 @@ export function TaskCenter() {
   useEffect(() => {
     void fetchTasks();
   }, [fetchTasks]);
+
+  const refresh = useCallback(() => fetchTasks(), [fetchTasks]);
+  const hasActiveTasks = tasks.some((task) => ['pending', 'running', 'executing'].includes(task.status));
+  usePolling(refresh, 1500, hasActiveTasks);
 
   const filtered = useMemo(() => tasks.filter((task) => !status || task.status === status), [status, tasks]);
   const stats = useMemo(
@@ -29,6 +34,13 @@ export function TaskCenter() {
   const openDetail = async (task: TaskSummary) => {
     const response = await tasksApi.detail(task.taskId);
     setDetail(response.data);
+  };
+
+  const cancel = async (taskId: string) => {
+    await tasksApi.cancel(taskId);
+    if (detail?.taskId === taskId) setDetail(null);
+    await fetchTasks();
+    message.success('任务已取消');
   };
 
   return (
@@ -47,6 +59,7 @@ export function TaskCenter() {
               { value: 'completed', label: '已完成' },
               { value: 'failed', label: '失败' },
               { value: 'running', label: '运行中' },
+              { value: 'cancelled', label: '已取消' },
             ]}
           />
         }
@@ -89,8 +102,8 @@ export function TaskCenter() {
                   <Button size="small" onClick={() => void openDetail(record)}>
                     详情
                   </Button>
-                  {record.status === 'running' || record.status === 'executing' ? (
-                    <Button size="small" danger>
+                  {['pending', 'running', 'executing'].includes(record.status) ? (
+                    <Button size="small" danger onClick={() => void cancel(record.taskId)}>
                       取消
                     </Button>
                   ) : null}

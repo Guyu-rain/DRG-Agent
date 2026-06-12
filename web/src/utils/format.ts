@@ -18,6 +18,7 @@ export function taskStatusText(status: TaskStatus | string) {
     running: '运行中',
     completed: '已完成',
     failed: '失败',
+    cancelled: '已取消',
     needs_review: '待复核',
   };
   return map[status] ?? status;
@@ -30,6 +31,7 @@ export function taskStatusColor(status: TaskStatus | string) {
     running: 'processing',
     completed: 'success',
     failed: 'error',
+    cancelled: 'default',
     needs_review: 'warning',
   };
   return map[status] ?? 'default';

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ErrorCode, NotFoundException
 from app.core.logging import logger
-from app.models import Document, DocumentTask, DocumentVersion, utcnow
+from app.models import Document, DocumentTask, DocumentVersion, ExecutionLog, utcnow
 
 _VALID_STATUS = ["draft", "review", "submitted", "archived"]
 
@@ -21,7 +21,13 @@ class DocumentService:
         self.db = db
 
     async def generate_document(self, payload: dict) -> DocumentTask:
-        """生成文档。创建 DocumentTask 并同步执行文档生成工作流。"""
+        """同步生成文档，供服务层测试和显式同步调用使用。"""
+        task = await self.create_generation_task(payload)
+        await self.run_generation(task)
+        return task
+
+    async def create_generation_task(self, payload: dict) -> DocumentTask:
+        """创建待执行的文档生成任务，不在请求进程中执行 LLM 工作流。"""
         doc_type = payload.get("doc_type") or payload.get("docType") or "requirements"
         title = payload.get("title") or "DRG-Agent 文档"
         context = payload.get("context") or {}
@@ -33,21 +39,39 @@ class DocumentService:
         )
         self.db.add(task)
         await self.db.flush()
-
-        await self.run_generation(task)
+        self.db.add(ExecutionLog(
+            level="info",
+            agent="document_service",
+            task_id=task.id,
+            message=f"文档生成任务已入队: {title}",
+            input_summary=str({"docType": doc_type, "title": title}),
+        ))
         return task
 
-    async def run_generation(self, task: DocumentTask) -> Document:
+    async def run_generation(self, task: DocumentTask) -> Document | None:
         """执行文档生成工作流并落库 (供服务层与 Celery 任务共用)。"""
         from app.agents import get_orchestrator
 
         task.status = "running"
+        await self.db.commit()
         try:
             orchestrator = get_orchestrator()
             state = await asyncio.to_thread(
                 orchestrator.execute_document_gen,
                 task.doc_type, task.title, task.context or {}, task.template,
             )
+            await self.db.refresh(task, attribute_names=["status", "finished_at"])
+            if task.status == "cancelled":
+                task.finished_at = task.finished_at or utcnow()
+                self.db.add(ExecutionLog(
+                    level="info",
+                    agent="document_service",
+                    task_id=task.id,
+                    message="文档生成任务已取消，丢弃生成结果",
+                ))
+                logger.info(f"文档生成结果因任务取消被丢弃: {task.id}")
+                return None
+
             content = state.get("formatted_content") or state.get("generated_content") or ""
             doc = Document(
                 doc_type=task.doc_type,
@@ -69,12 +93,32 @@ class DocumentService:
             task.result_doc_id = doc.id
             task.status = "completed"
             task.finished_at = utcnow()
+            self.db.add(ExecutionLog(
+                level="info",
+                agent="document_service",
+                task_id=task.id,
+                message=f"文档生成完成: {doc.id}",
+                output_summary=doc.id,
+            ))
             logger.info(f"文档生成完成: {doc.id} <- {task.id}")
             return doc
         except Exception as exc:  # noqa: BLE001
+            await self.db.refresh(task, attribute_names=["status", "finished_at"])
+            if task.status == "cancelled":
+                task.finished_at = task.finished_at or utcnow()
+                logger.info(f"文档任务取消后结束执行: {task.id}")
+                return None
+
             task.status = "failed"
             task.error_message = str(exc)
             task.finished_at = utcnow()
+            self.db.add(ExecutionLog(
+                level="error",
+                agent="document_service",
+                task_id=task.id,
+                message="文档生成失败",
+                error_detail=str(exc),
+            ))
             logger.error(f"文档生成失败 {task.id}: {exc}")
             raise
 
@@ -194,6 +238,10 @@ class DocumentService:
 
     @staticmethod
     def to_detail(doc: Document) -> dict:
+        metadata = dict(doc.metadata_json or {})
+        metadata.setdefault("createdAt", doc.created_at)
+        metadata.setdefault("generatedBy", doc.generated_by)
+        metadata.setdefault("sourceTasks", [doc.source_task_id] if doc.source_task_id else [])
         return {
             "docId": doc.id,
             "title": doc.title,
@@ -201,6 +249,10 @@ class DocumentService:
             "version": doc.version,
             "status": doc.status,
             "content": doc.content,
-            "metadata": doc.metadata_json,
+            "createdAt": doc.created_at,
+            "submittedAt": doc.submitted_at,
+            "generatedBy": doc.generated_by,
+            "fileSize": doc.file_size,
+            "metadata": metadata,
             "sections": doc.sections or [],
         }

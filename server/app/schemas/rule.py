@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import Field
+
 from app.schemas.common import CamelModel
 
 
@@ -39,6 +41,10 @@ class RuleImportRequest(CamelModel):
 
     version_name: str
     description: str | None = None
+
+
+class RuleVersionRenameRequest(CamelModel):
+    version_name: str = Field(min_length=1, max_length=200)
 
 
 class RuleVersionSummary(CamelModel):

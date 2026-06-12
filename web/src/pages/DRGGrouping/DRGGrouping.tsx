@@ -1,13 +1,16 @@
-import { PlayCircleOutlined, SaveOutlined } from '@ant-design/icons';
+import { ImportOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { Alert, Button, Descriptions, message, Space, Typography } from 'antd';
 import { useCallback, useState } from 'react';
 import { PageHeader } from '@/components/Common/PageHeader';
 import { useGroupingStore } from '@/stores/groupingStore';
 import type { StructuredCaseInput } from '@/types/case';
+import type { TestCaseItem } from '@/types/testcase';
 import { demoCaseText } from '@/utils/constants';
+import { testCaseToText } from '@/utils/groupingData';
 import { GroupingResultPanel } from './components/GroupingResultPanel';
 import { PatientCaseInput } from './components/PatientCaseInput';
 import { RuleVersionSelector } from './components/RuleVersionSelector';
+import { TestCaseImportModal } from './components/TestCaseImportModal';
 import './DRGGrouping.css';
 
 const defaultStructured: StructuredCaseInput = {
@@ -24,7 +27,7 @@ const defaultStructured: StructuredCaseInput = {
 export function DRGGrouping() {
   const [text, setText] = useState(demoCaseText);
   const [structured, setStructured] = useState<StructuredCaseInput>(defaultStructured);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [testcaseImportOpen, setTestcaseImportOpen] = useState(false);
   const {
     currentCase,
     currentResult,
@@ -32,8 +35,10 @@ export function DRGGrouping() {
     isExecuting,
     isParsing,
     selectedRuleVersion,
+    resultRuleVersion,
     setInputMode,
     setRuleVersion,
+    resetWorkspace,
     submitCase,
     parseCase,
     executeGrouping,
@@ -49,15 +54,29 @@ export function DRGGrouping() {
       );
       await parseCase(caseId);
       const taskId = await executeGrouping();
-      setActiveTaskId(taskId);
-      await fetchResult(taskId);
-      message.success('入组执行完成');
+      const response = await fetchResult(taskId);
+      if (response.result) {
+        message.success('入组执行完成');
+      } else {
+        message.warning(response.error?.message ?? '入组未成功，请查看错误信息');
+      }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '入组执行失败');
     }
   }, [executeGrouping, fetchResult, inputMode, parseCase, structured, submitCase, text]);
 
-  const resultExpired = currentResult && selectedRuleVersion && activeTaskId && currentResult.taskId !== activeTaskId;
+  const resultExpired = Boolean(
+    currentResult && selectedRuleVersion && resultRuleVersion && selectedRuleVersion !== resultRuleVersion,
+  );
+
+  const importTestcase = (testCase: TestCaseItem) => {
+    resetWorkspace();
+    setText(testCaseToText(testCase));
+    setInputMode('text');
+    if (testCase.ruleVersion) setRuleVersion(testCase.ruleVersion);
+    setTestcaseImportOpen(false);
+    message.success(`已导入测试用例：${testCase.testCaseId}`);
+  };
 
   return (
     <div>
@@ -98,8 +117,12 @@ export function DRGGrouping() {
               </div>
             ) : null}
             <div className="drg-input-actions">
-              <Button icon={<SaveOutlined />} onClick={() => message.success('样例已保存在当前输入面板')}>
-                保存样例
+              <Button
+                icon={<ImportOutlined />}
+                disabled={isExecuting || isParsing}
+                onClick={() => setTestcaseImportOpen(true)}
+              >
+                导入测试用例
               </Button>
               <Button
                 type="primary"
@@ -116,6 +139,11 @@ export function DRGGrouping() {
           <GroupingResultPanel response={currentResult} />
         </section>
       </div>
+      <TestCaseImportModal
+        open={testcaseImportOpen}
+        onClose={() => setTestcaseImportOpen(false)}
+        onImport={importTestcase}
+      />
     </div>
   );
 }

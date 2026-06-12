@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import html
+
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, pagination_params
+from app.core.config import settings
+from app.core.exceptions import BadRequestException, ErrorCode
 from app.schemas.common import ok, paginate
 from app.schemas.document import DocumentEditRequest, DocumentGenerateRequest, DocumentStatusUpdate
 from app.services.document_service import DocumentService
@@ -17,11 +21,19 @@ router = APIRouter(prefix="/documents", tags=["文档系统"])
 @router.post("/generate", status_code=202, summary="生成文档")
 async def generate_document(payload: DocumentGenerateRequest, db: AsyncSession = Depends(get_db)) -> dict:
     service = DocumentService(db)
-    task = await service.generate_document(payload.model_dump())
+    task = await service.create_generation_task(payload.model_dump())
+    await db.commit()
+    if settings.TASKS_EAGER:
+        await service.run_generation(task)
+        await db.commit()
+    else:
+        from app.tasks.document_tasks import generate_document_task
+
+        generate_document_task.apply_async(args=[task.id], task_id=task.id)
     return ok(
         {"docTaskId": task.id, "status": task.status, "createdAt": task.created_at,
          "resultDocId": task.result_doc_id},
-        message="文档生成任务已完成",
+        message="文档生成任务已创建",
         code=202,
     )
 
@@ -59,17 +71,103 @@ async def get_document_versions(doc_id: str, db: AsyncSession = Depends(get_db))
     })
 
 
-@router.get("/{doc_id}/download", summary="下载文档", response_class=PlainTextResponse)
+@router.get("/{doc_id}/download", summary="下载文档")
 async def download_document(
     doc_id: str, format: str = Query(default="markdown"), db: AsyncSession = Depends(get_db)
-) -> PlainTextResponse:
+) -> Response:
     service = DocumentService(db)
     doc = await service.get_document(doc_id)
-    filename = f"{doc.id}.md"
-    return PlainTextResponse(
-        content=doc.content,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    fmt = format.lower()
+    if fmt in ("markdown", "md"):
+        content = doc.content.encode("utf-8")
+        suffix, media_type = "md", "text/markdown; charset=utf-8"
+    elif fmt == "html":
+        body = "<br>\n".join(html.escape(line) for line in doc.content.splitlines())
+        content = (
+            "<!doctype html><html><head><meta charset=\"utf-8\">"
+            f"<title>{html.escape(doc.title)}</title></head><body>{body}</body></html>"
+        ).encode("utf-8")
+        suffix, media_type = "html", "text/html; charset=utf-8"
+    elif fmt == "pdf":
+        content = _make_pdf(doc.title, doc.content)
+        suffix, media_type = "pdf", "application/pdf"
+    else:
+        raise BadRequestException(
+            ErrorCode.REQUIRED_FIELD_MISSING,
+            f"不支持的文档格式: {format}，可选 markdown/html/pdf",
+        )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{doc.id}.{suffix}"'},
     )
+
+
+def _make_pdf(title: str, content: str) -> bytes:
+    """生成使用 PDF 内置 CJK 字体的轻量文本 PDF。"""
+    lines = [title, ""] + content.splitlines()
+    pages = [lines[i:i + 42] for i in range(0, len(lines), 42)] or [[]]
+    objects: list[bytes] = []
+
+    def add(value: bytes) -> int:
+        objects.append(value)
+        return len(objects)
+
+    catalog_id = add(b"")
+    pages_id = add(b"")
+    font_id = add(
+        b"<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light "
+        b"/Encoding /UniGB-UCS2-H /DescendantFonts [4 0 R] >>"
+    )
+    page_ids: list[int] = []
+    content_ids: list[int] = []
+    descendant_id = add(
+        b"<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light "
+        b"/CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> >>"
+    )
+    assert descendant_id == 4
+
+    for page_lines in pages:
+        commands = ["BT", "/F1 11 Tf", "50 790 Td", "15 TL"]
+        for line in page_lines:
+            encoded = line[:100].encode("utf-16-be").hex().upper()
+            commands.append(f"<{encoded}> Tj")
+            commands.append("T*")
+        commands.append("ET")
+        stream = "\n".join(commands).encode("ascii")
+        content_ids.append(add(
+            f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream"
+        ))
+        page_ids.append(add(b""))
+
+    for page_id, content_id in zip(page_ids, content_ids):
+        objects[page_id - 1] = (
+            f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 595 842] "
+            f"/Resources << /Font << /F1 {font_id} 0 R >> >> /Contents {content_id} 0 R >>"
+        ).encode()
+    objects[pages_id - 1] = (
+        f"<< /Type /Pages /Count {len(page_ids)} /Kids "
+        f"[{' '.join(f'{page_id} 0 R' for page_id in page_ids)}] >>"
+    ).encode()
+    objects[catalog_id - 1] = f"<< /Type /Catalog /Pages {pages_id} 0 R >>".encode()
+
+    output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(output))
+        output.extend(f"{index} 0 obj\n".encode())
+        output.extend(obj)
+        output.extend(b"\nendobj\n")
+    xref = len(output)
+    output.extend(f"xref\n0 {len(objects) + 1}\n".encode())
+    output.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        output.extend(f"{offset:010d} 00000 n \n".encode())
+    output.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\n"
+        f"startxref\n{xref}\n%%EOF\n".encode()
+    )
+    return bytes(output)
 
 
 @router.get("/{doc_id}", summary="获取文档详情")

@@ -39,6 +39,16 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const now = useClock();
 
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 720px)');
+    const syncCollapsed = () => {
+      if (media.matches) setCollapsed(true);
+    };
+    syncCollapsed();
+    media.addEventListener('change', syncCollapsed);
+    return () => media.removeEventListener('change', syncCollapsed);
+  }, []);
+
   const activeKey = selectedKey(location.pathname);
   const activeItem = routeItems.find((r) => r.key === activeKey) ?? routeItems[0];
 

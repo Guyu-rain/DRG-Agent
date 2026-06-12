@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/0"
+    TASKS_EAGER: bool = False
 
     # Storage
     DOCUMENT_STORAGE_PATH: str = "./server/documents"

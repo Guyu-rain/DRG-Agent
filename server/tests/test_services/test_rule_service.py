@@ -26,6 +26,18 @@ async def test_only_one_active_version(db_session):
     assert (await service.get_active_version()).id == v2.id
 
 
+async def test_rename_version_preserves_identity_and_status(db_session):
+    service = RuleService(db_session)
+    version = await service.import_demo_rules("原名称")
+    await service.activate_version(version.id)
+
+    renamed = await service.rename_version(version.id, "  新规则名称  ")
+
+    assert renamed.id == version.id
+    assert renamed.version_name == "新规则名称"
+    assert renamed.status == "active"
+
+
 async def test_delete_active_version_blocked(db_session):
     service = RuleService(db_session)
     version = await service.import_demo_rules()

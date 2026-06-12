@@ -21,6 +21,23 @@ async def test_get_version_not_found(client):
     assert resp.json()["code"] == 40402
 
 
+async def test_rename_rule_version(seeded_client):
+    versions = (await seeded_client.get("/api/v1/rules/versions")).json()["data"]["items"]
+    version_id = versions[0]["versionId"]
+
+    resp = await seeded_client.patch(
+        f"/api/v1/rules/versions/{version_id}",
+        json={"versionName": "新规则名称"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["versionId"] == version_id
+    assert resp.json()["data"]["versionName"] == "新规则名称"
+
+    detail = await seeded_client.get(f"/api/v1/rules/versions/{version_id}")
+    assert detail.json()["data"]["versionName"] == "新规则名称"
+
+
 async def test_search_rules(seeded_client):
     resp = await seeded_client.get("/api/v1/rules/search?code=A01.002&ruleType=mdc")
     assert resp.status_code == 200

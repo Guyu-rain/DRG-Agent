@@ -23,6 +23,14 @@ from app.llm import MockLLMClient  # noqa: E402
 _DEMO_RULES_PATH = _SERVER_DIR / "data" / "rules" / "demo_rules.json"
 
 
+@pytest.fixture(autouse=True)
+def _eager_background_tasks(monkeypatch):
+    """接口测试内同步执行后台任务，生产环境仍默认使用 Celery。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "TASKS_EAGER", True)
+
+
 # --- Mock LLM (整个测试会话生效) --------------------------------------------
 
 

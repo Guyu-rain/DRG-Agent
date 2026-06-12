@@ -20,6 +20,8 @@ async def test_execute_grouping_course_example(seeded_client):
     assert result.status_code == 200
     data = result.json()["data"]
     assert data["result"]["drg"]["code"] == "BB11"
+    assert data["ruleVersionId"]
+    assert data["ruleVersion"] == "DRG 2.0 演示规则"
 
 
 async def test_grouping_result_not_found(client):

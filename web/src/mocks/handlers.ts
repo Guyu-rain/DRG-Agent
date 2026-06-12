@@ -127,6 +127,11 @@ export const handlers = [
   http.post(`${api}/rules/versions/:versionId/activate`, ({ params }) =>
     ok({ ...ruleVersions[0], versionId: String(params.versionId), status: 'active', isActive: true }),
   ),
+  http.patch(`${api}/rules/versions/:versionId`, async ({ request, params }) => {
+    const body = (await request.json()) as { versionName: string };
+    const current = ruleVersions.find((item) => item.versionId === String(params.versionId)) ?? ruleVersions[0];
+    return ok({ ...current, versionId: String(params.versionId), versionName: body.versionName });
+  }),
   http.delete(`${api}/rules/versions/:versionId`, ({ params }) => ok({ versionId: String(params.versionId) })),
   http.get(`${api}/rules/search`, ({ request }) => {
     const url = new URL(request.url);
@@ -277,6 +282,14 @@ export const handlers = [
       202,
     );
   }),
+  http.get(`${api}/testcases/tasks/:testTaskId`, ({ params }) =>
+    ok({
+      testTaskId: String(params.testTaskId),
+      status: 'completed',
+      createdAt: '2026-05-21T07:50:00Z',
+      generatedCount: testcases.length,
+    }),
+  ),
   http.get(`${api}/testcases`, ({ request }) => {
     const url = new URL(request.url);
     const scenarioType = url.searchParams.get('scenarioType');
@@ -287,7 +300,17 @@ export const handlers = [
   http.get(`${api}/testcases/:testCaseId`, ({ params }) =>
     ok(testcases.find((item) => item.testCaseId === String(params.testCaseId)) ?? testcases[0]),
   ),
-  http.post(`${api}/testcases/export`, () => ok({ fileUrl: '/mock/testcases.xlsx' })),
+  http.post(`${api}/testcases/:testCaseId/execute`, ({ params }) => {
+    const item = testcases.find((testcase) => testcase.testCaseId === String(params.testCaseId)) ?? testcases[0];
+    return ok({
+      testCaseId: item.testCaseId,
+      actualResult: item.expectedResult,
+      expectedResult: item.expectedResult,
+      isPassed: true,
+      executedAt: '2026-05-21T08:00:00Z',
+    });
+  }),
+  http.post(`${api}/testcases/export`, () => ok({ downloadUrl: '/api/v1/testcases/export/mock.xlsx' })),
   http.post(`${api}/testcases/submit-to-documents`, () => ok({ docTaskId: 'DOC-TASK-TEST-001' })),
 
   http.get(`${api}/tasks`, ({ request }) => {
@@ -305,7 +328,7 @@ export const handlers = [
       ],
     }),
   ),
-  http.post(`${api}/tasks/:taskId/cancel`, ({ params }) => ok({ taskId: String(params.taskId), status: 'failed' })),
+  http.post(`${api}/tasks/:taskId/cancel`, ({ params }) => ok({ taskId: String(params.taskId), status: 'cancelled' })),
   http.post(`${api}/tasks/:taskId/review`, ({ params }) => ok({ taskId: String(params.taskId), status: 'needs_review' })),
   http.get(`${api}/logs`, ({ request }) => {
     const { page, pageSize } = parsePaging(request);

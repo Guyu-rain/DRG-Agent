@@ -572,7 +572,7 @@ server/tests/
 │   ├── test_testcases_api.py
 │   ├── test_tasks_api.py
 │   └── test_system_api.py
-└── test_integration/              # 集成测试 (端到端工作流)
+└── test_integration/              # 跨模块集成工作流测试
     ├── test_grouping_workflow.py
     └── test_demo_scenarios.py
 ```

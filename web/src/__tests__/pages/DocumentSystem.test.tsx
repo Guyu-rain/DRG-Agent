@@ -34,6 +34,6 @@ describe('DocumentSystem', () => {
     await userEvent.click(screen.getByRole('button', { name: /生成文档/ }));
     await screen.findByLabelText('文档标题');
     await userEvent.click(screen.getByRole('button', { name: '确认生成文档' }));
-    expect(await screen.findByText(/文档生成任务已创建/)).toBeInTheDocument();
+    expect(await screen.findByText(/文档生成完成/)).toBeInTheDocument();
   });
 });

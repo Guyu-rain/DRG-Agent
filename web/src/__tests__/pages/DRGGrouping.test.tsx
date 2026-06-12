@@ -1,9 +1,25 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { DRGGrouping } from '@/pages/DRGGrouping/DRGGrouping';
+import { useGroupingStore } from '@/stores/groupingStore';
 
 describe('DRGGrouping', () => {
+  beforeEach(() => {
+    useGroupingStore.setState({
+      currentCaseId: null,
+      currentCase: null,
+      currentResult: null,
+      resultRuleVersion: null,
+      currentTaskId: null,
+      selectedRuleVersion: null,
+      inputMode: 'text',
+      isExecuting: false,
+      isParsing: false,
+      history: [],
+    });
+  });
+
   it('renders text mode by default', async () => {
     render(<DRGGrouping />);
     expect(screen.getByText('文本模式')).toBeInTheDocument();
@@ -33,11 +49,35 @@ describe('DRGGrouping', () => {
     expect(screen.getAllByText(/急性呼吸衰竭/).length).toBeGreaterThan(0);
   });
 
-  it('keeps action buttons after result', async () => {
+  it('shows review and result download actions after grouping', async () => {
     render(<DRGGrouping />);
     await screen.findByText(/DRG 2.0 演示规则/);
     await userEvent.click(screen.getByRole('button', { name: /开始入组/ }));
-    await waitFor(() => expect(screen.getByText('生成文档')).toBeInTheDocument(), { timeout: 3000 });
-    expect(screen.getByText('生成测试')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('保存结果')).toBeInTheDocument(), { timeout: 3000 });
+    expect(screen.getByText('提交复核')).toBeInTheDocument();
+    expect(screen.queryByText('生成文档')).not.toBeInTheDocument();
+    expect(screen.queryByText('生成测试')).not.toBeInTheDocument();
+  });
+
+  it('imports a generated testcase into text mode', async () => {
+    render(<DRGGrouping />);
+    await screen.findByText(/DRG 2.0 演示规则/);
+    await userEvent.click(screen.getByRole('button', { name: /导入测试用例/ }));
+    await userEvent.click(await screen.findByText('主诊断与手术正常命中 BB11'));
+    await userEvent.click(screen.getByRole('button', { name: '导入到文本模式' }));
+
+    expect(screen.getByDisplayValue(/测试用例：主诊断与手术正常命中 BB11/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/主诊断：A01.002\+G01\*/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('解析结果')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('does not mark a result stale when the same rule version was used', async () => {
+    render(<DRGGrouping />);
+    await screen.findByText(/DRG 2.0 演示规则/);
+    await userEvent.click(screen.getByRole('button', { name: /开始入组/ }));
+    await screen.findByText('最终 DRG', {}, { timeout: 3000 });
+
+    expect(screen.queryByText('规则版本已变化，当前结果可能已过期，请重新入组。')).not.toBeInTheDocument();
   });
 });

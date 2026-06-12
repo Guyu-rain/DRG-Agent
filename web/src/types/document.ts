@@ -10,7 +10,7 @@ export interface DocumentGenerateRequest {
 
 export interface DocumentTaskResponse {
   docTaskId: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   createdAt: string;
   resultDocId?: string;
   errorMessage?: string;

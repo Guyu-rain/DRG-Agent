@@ -2,7 +2,7 @@
 
 ## 总览
 
-**目标**: 将 Phase 1 (后端) 和 Phase 2 (前端) 对接，关闭 MSW mock，切换到真实后端 API。完成完整的端到端测试、性能测试、跨浏览器验证，确保系统在课程演示环境中可正常运行。
+**目标**: 将 Phase 1 (后端) 和 Phase 2 (前端) 对接，关闭 MSW mock，切换到真实后端 API。完成完整业务流程走查、性能测试、跨浏览器验证，确保系统在课程演示环境中可正常运行。
 
 **前置条件**:
 - Phase 1 后端所有测试通过，43 个 API 全部可用
@@ -15,7 +15,7 @@
 - 课程示例 (A01.002+G01* → BB11) 从输入到结果显示全链路通过
 - 文档自动生成 → 编辑 → 提交全流程通过
 - 测试用例生成 → 执行 → 验证全流程通过
-- E2E 测试套件全部通过
+- 真实前端业务流程人工验收通过
 - Chrome 和 Safari 渲染一致
 
 ---
@@ -269,99 +269,9 @@ DRG 入组完成后
 
 ---
 
-## Step 3: 端到端 (E2E) 测试
+## Step 3: 性能测试
 
-### 3.1 Playwright E2E 测试
-
-安装 Playwright:
-
-```bash
-cd web
-pnpm add -D @playwright/test
-npx playwright install chromium
-```
-
-测试文件: `web/e2e/`
-
-```typescript
-// web/e2e/grouping.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('DRG Grouping E2E', () => {
-  test('课程示例: 伤寒性脑膜炎 → BB11', async ({ page }) => {
-    await page.goto('http://localhost:5173/drg');
-    
-    // 等待页面加载
-    await page.waitForSelector('.rule-version-selector');
-    
-    // 选择规则版本
-    await page.click('.rule-version-selector');
-    await page.click('text=DRG 2.0 演示规则');
-    
-    // 输入病历
-    await page.fill('textarea[name="rawText"]', 
-      '主诊断：A01.002+G01* 伤寒性脑膜炎\n' +
-      '次要诊断：J96.0 急性呼吸衰竭\n' +
-      '主要手术：38.1000x002 动脉内膜剥脱术'
-    );
-    
-    // 点击开始入组
-    await page.click('button:has-text("开始入组")');
-    
-    // 等待结果
-    await page.waitForSelector('.grouping-result-panel', { timeout: 10000 });
-    
-    // 验证结果
-    await expect(page.locator('.drg-code')).toHaveText('BB11');
-    await expect(page.locator('.mdc-code')).toHaveText('MDCB');
-    
-    // 验证证据链
-    const evidenceSteps = page.locator('.ant-timeline-item');
-    await expect(evidenceSteps).toHaveCount(5);
-  });
-  
-  test('主诊断缺失 → 显示错误', async ({ page }) => {
-    await page.goto('http://localhost:5173/drg');
-    
-    // 不填写主诊断，直接点击开始入组
-    await page.click('button:has-text("开始入组")');
-    
-    // 验证错误提示
-    await expect(page.locator('.ant-alert-error')).toBeVisible();
-    await expect(page.locator('.ant-alert-error')).toContainText('主诊断');
-  });
-});
-```
-
-### 3.2 E2E 测试场景清单
-
-| 编号 | 测试场景 | 输入/预期 | 类型 |
-|------|---------|----------|------|
-| E2E-01 | 课程示例入组 | A01.002+G01* + J96.0 + 38.1000x002 → BB11 (MCC) | 核心流程 |
-| E2E-02 | example Case1 入组 | C16.301 + [K66.002,...] + 43.7x03 → GB29 (CC) | 核心流程 |
-| E2E-03 | example Case2 入组 | J86.000x013 + [K66.002,...] + 34.8200x002 → EC29 (CC) | 核心流程 |
-| E2E-04 | example Case3 入组 | K83.105 + [K83.109,...] + 51.6303 → HC15 (NONE) | 核心流程 |
-| E2E-05 | 结构化病历入组 | 表单填写 → 入组成功 | 核心流程 |
-| E2E-06 | 无编码病历入组 (nocode) | 仅有疾病名称无编码 → warning 提示 | 边界场景 |
-| E2E-07 | 主诊断缺失 → 错误提示 | 不填主诊断 → 校验失败 | 异常场景 |
-| E2E-08 | 编码非法 → 错误提示 | INVALID_CODE → 格式错误 | 异常场景 |
-| E2E-09 | 无法匹配 MDC → 未入组说明 | Z99.9 → 无匹配 | 异常场景 |
-| E2E-10 | 规则文件上传 → 解析 → 激活 | 上传 Excel → 版本列表更新 | 规则管理 |
-| E2E-11 | 生成需求分析文档 → 提交 | POST generate → 预览 → submit | 文档系统 |
-| E2E-12 | 生成测试用例 → 导出 Excel | POST generate → 导出 xlsx | 测试用例 |
-| E2E-13 | 任务中心查看任务详情 | 点击任务 → 步骤列表 + 耗时 | 任务管理 |
-| E2E-14 | 系统配置修改 → 健康检查 | PUT config + GET health | 系统管理 |
-
-**验收**:
-- [ ] `npx playwright test` 14 个 E2E 场景全部通过
-- [ ] Playwright HTML report 可正常查看
-- [ ] Playwright trace 可回放失败的操作步骤
-
----
-
-## Step 4: 性能测试
-
-### 4.1 后端性能指标
+### 3.1 后端性能指标
 
 | 指标 | 目标 | 测试方法 |
 |------|------|----------|
@@ -371,7 +281,7 @@ test.describe('DRG Grouping E2E', () => {
 | 解释生成 (LLM) | < 5 秒 | LLM call 计时 |
 | API 响应时间 (P95) | < 500ms (不含 LLM 调用) | Apache Bench / wrk |
 
-### 4.2 性能测试脚本
+### 3.2 性能测试脚本
 
 ```bash
 # 入组 API 性能
@@ -382,7 +292,7 @@ ab -n 50 -c 5 -p grouping_request.json -T application/json \
 ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 ```
 
-### 4.3 前端性能指标
+### 3.3 前端性能指标
 
 | 指标 | 目标 | 测试方法 |
 |------|------|----------|
@@ -399,9 +309,9 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 
 ---
 
-## Step 5: 错误处理与健壮性
+## Step 4: 错误处理与健壮性
 
-### 5.1 后端错误场景覆盖
+### 4.1 后端错误场景覆盖
 
 | 场景 | 预期行为 |
 |------|----------|
@@ -412,7 +322,7 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 | 并发入组请求 | 每个请求独立处理，不相互影响 |
 | 超大文件上传 | 返回 413 或限制提示 |
 
-### 5.2 前端错误场景覆盖
+### 4.2 前端错误场景覆盖
 
 | 场景 | 预期行为 |
 |------|----------|
@@ -422,7 +332,7 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 | 空数据 | 显示 `EmptyState` 组件 ("暂无数据") |
 | 长文本溢出 | 使用 Ant Design `Typography.Paragraph` ellipsis |
 
-### 5.3 全局错误边界
+### 4.3 全局错误边界
 
 ```tsx
 // src/components/Common/ErrorFallback.tsx
@@ -438,9 +348,9 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 
 ---
 
-## Step 6: 跨浏览器验证
+## Step 5: 跨浏览器验证
 
-### 6.1 目标浏览器
+### 5.1 目标浏览器
 
 | 浏览器 | 版本 | 平台 |
 |--------|------|------|
@@ -448,7 +358,7 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 | Safari | ≥ 17 | macOS |
 | Edge | ≥ 120 | Windows |
 
-### 6.2 验证要点
+### 5.2 验证要点
 
 - [ ] 页面布局无错位 (Flexbox/Grid 兼容)
 - [ ] Ant Design 组件渲染一致
@@ -462,9 +372,9 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 
 ---
 
-## Step 7: 数据库完整性验证
+## Step 6: 数据库完整性验证
 
-### 7.1 数据一致性检查
+### 6.1 数据一致性检查
 
 - 入组任务 (`GroupingTask`) 必须关联有效的 `PatientCase` 和 `RuleVersion`
 - 每个 `GroupingTask` 有且仅有一个 `GroupingResult` (1:1 关系)
@@ -472,7 +382,7 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 - 测试用例 (`TestCase`) 必须有关联的 `TestTask` (来源记录)
 - 删除 `RuleVersion` 时检查是否有 `GroupingTask` 引用，如有则阻止删除
 
-### 7.2 数据清理
+### 6.2 数据清理
 
 - 测试完成后，提供清理脚本删除测试数据
 - Demo 数据初始化幂等 (重复调用不创建重复数据)
@@ -484,9 +394,9 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 
 ---
 
-## Step 8: 文档与最终检查
+## Step 7: 文档与最终检查
 
-### 8.1 交付文档更新
+### 7.1 交付文档更新
 
 | 文档 | 说明 |
 |------|------|
@@ -497,7 +407,7 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 | `plans/development_phases/phase2_frontend.md` | 前端开发任务清单 |
 | `plans/development_phases/phase3_integration.md` | 本文档 |
 
-### 8.2 代码仓库检查
+### 7.2 代码仓库检查
 
 - [ ] `.gitignore` 正确忽略 `.venv/`, `node_modules/`, `.env`, `dist/`, `__pycache__/`
 - [ ] `package.json` 锁定 pnpm 版本 (`packageManager`)
@@ -506,7 +416,7 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/cases
 - [ ] `requirements.txt` 和 `uv.lock` (如有) 提交到仓库
 - [ ] 代码注释覆盖关键逻辑 (规则引擎、智能体编排)
 
-### 8.3 演示环境启动检查
+### 7.3 演示环境启动检查
 
 ```bash
 # 一键启动脚本 (start.sh / start.ps1)
@@ -541,14 +451,13 @@ echo "系统已就绪: http://localhost:5173"
 | 4 | 测试用例生成 → 执行 → 导出 | Excel 导出完整，执行结果对比正确 |
 | 5 | 规则文件导入 → 激活 → 删除 | 版本管理全流程正常 |
 | 6 | 异常场景处理正确 | 每种异常有明确错误提示，nocode 场景有 warning |
-| 7 | E2E 测试全部通过 | `npx playwright test` 14/14 通过 |
-| 8 | 后端性能达标 | 规则引擎 < 200ms，全流程 < 15s |
-| 9 | 前端性能达标 | Lighthouse > 80，首屏 < 3s |
-| 10 | Chrome + Safari 渲染一致 | 手动验证 |
-| 11 | Docker 服务健壮性 | 手动停止 PostgreSQL → 健康检查报 disconnected |
-| 12 | 数据库外键完整性 | 删被引用资源 → 409 错误 |
-| 13 | 代码仓库整洁 | 无 secret 泄露，注释完整 |
-| 14 | 一键启动可用 | `start.sh` → 全部服务就绪 |
+| 7 | 后端性能达标 | 规则引擎 < 200ms，全流程 < 15s |
+| 8 | 前端性能达标 | Lighthouse > 80，首屏 < 3s |
+| 9 | Chrome + Safari 渲染一致 | 手动验证 |
+| 10 | Docker 服务健壮性 | 手动停止 PostgreSQL → 健康检查报 disconnected |
+| 11 | 数据库外键完整性 | 删被引用资源 → 409 错误 |
+| 12 | 代码仓库整洁 | 无 secret 泄露，注释完整 |
+| 13 | 一键启动可用 | `start.sh` → 全部服务就绪 |
 
 ---
 
@@ -592,9 +501,8 @@ Phase 2 (前端)
 Phase 3 (集成)
 ├── Step 1: 关闭 MSW，连接真实 API ────────┐
 ├── Step 2: 完整业务流程走查               │
-├── Step 3: E2E 测试 (Playwright)          │
-├── Step 4-6: 性能 + 错误处理 + 跨浏览器   │
-└── Step 7-8: 数据库完整性 + 最终检查      │
+├── Step 3-5: 性能 + 错误处理 + 跨浏览器   │
+└── Step 6-7: 数据库完整性 + 最终检查      │
 ```
 
 **开发建议**: Phase 2 和 Phase 1 可以部分并行开发，但 Phase 2 的页面开发 (Step 3-7) 之前必须确保 Phase 1 的 API 接口定义 (Step 7) 已完成。MSW mock 使得前端可以在 API 尚未完全实现时先行开发。

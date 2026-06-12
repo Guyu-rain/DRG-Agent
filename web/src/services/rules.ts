@@ -15,6 +15,12 @@ export const rulesApi = {
     request<ApiResponse<RuleVersionDetail>>({ method: 'GET', url: `/rules/versions/${versionId}` }),
   activate: (versionId: string) =>
     request<ApiResponse<RuleVersionSummary>>({ method: 'POST', url: `/rules/versions/${versionId}/activate` }),
+  rename: (versionId: string, versionName: string) =>
+    request<ApiResponse<RuleVersionSummary>>({
+      method: 'PATCH',
+      url: `/rules/versions/${versionId}`,
+      data: { versionName },
+    }),
   remove: (versionId: string) =>
     request<ApiResponse<{ versionId: string }>>({ method: 'DELETE', url: `/rules/versions/${versionId}` }),
   search: (code: string, ruleType?: RuleType) =>

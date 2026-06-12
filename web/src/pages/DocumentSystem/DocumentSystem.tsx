@@ -18,7 +18,7 @@ export function DocumentSystem() {
   const submit = async () => {
     const values = await form.validateFields();
     const taskId = await generateDocument(values);
-    message.success(`文档生成任务已创建：${taskId}`);
+    message.success(`文档生成完成：${taskId}`);
     setOpen(false);
   };
 

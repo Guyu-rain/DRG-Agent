@@ -98,6 +98,7 @@ class GroupingService:
             "taskId": task.id,
             "status": task.status,
             "caseId": task.case_id,
+            "ruleVersionId": version.id if version else task.rule_version_id,
             "ruleVersion": version.version_name if version else None,
             "startedAt": task.started_at,
             "finishedAt": task.finished_at,

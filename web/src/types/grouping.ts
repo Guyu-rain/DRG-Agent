@@ -57,6 +57,7 @@ export interface GroupingResultResponse {
   taskId: string;
   status: TaskStatus;
   caseId: string;
+  ruleVersionId: string;
   ruleVersion: string;
   startedAt: string;
   finishedAt?: string;
