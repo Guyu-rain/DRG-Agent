@@ -64,3 +64,4 @@ file/
 
 # claude
 .claude/server/data/rules/import_*.json
+scripts/
