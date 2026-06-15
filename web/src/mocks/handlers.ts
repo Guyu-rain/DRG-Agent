@@ -29,6 +29,17 @@ const parsePaging = (request: Request) => {
   };
 };
 
+// 对话式文档生成的内存态会话列表 (Mock)
+const mockConversations: Array<{
+  conversationId: string;
+  title: string;
+  docType: string | null;
+  documentId: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}> = [];
+
 export const handlers = [
   http.get(`${api}/system/health`, async () => {
     await delay(180);
@@ -211,6 +222,62 @@ export const handlers = [
       resultDocId: documents[0].docId,
     }),
   ),
+
+  // 对话式文档生成 (注意: 须在 /documents/:docId 之前注册)
+  http.get(`${api}/documents/conversations`, ({ request }) => {
+    const { page, pageSize } = parsePaging(request);
+    return ok(paged(mockConversations, page, pageSize));
+  }),
+  http.post(`${api}/documents/conversations`, async ({ request }) => {
+    const body = (await request.json()) as { title?: string; docType?: string | null };
+    const conv = {
+      conversationId: `CONV-MOCK-${mockConversations.length + 1}`,
+      title: body.title ?? '新文档对话',
+      docType: body.docType ?? null,
+      documentId: null,
+      status: 'active',
+      createdAt: '2026-05-21T07:30:00Z',
+      updatedAt: '2026-05-21T07:30:00Z',
+    };
+    mockConversations.unshift(conv);
+    return ok(conv, 'success', 201);
+  }),
+  http.get(`${api}/documents/conversations/:convId`, ({ params }) => {
+    const base = documentDetails[documents[0].docId];
+    return ok({
+      conversationId: String(params.convId),
+      title: base.title,
+      docType: base.type,
+      documentId: base.docId,
+      status: 'active',
+      createdAt: '2026-05-21T07:30:00Z',
+      updatedAt: '2026-05-21T07:30:00Z',
+      messages: [],
+      document: base,
+    });
+  }),
+  http.post(`${api}/documents/conversations/:convId/messages`, async ({ request, params }) => {
+    await delay(120);
+    const body = (await request.json()) as { instruction: string };
+    const base = documentDetails[documents[0].docId];
+    return ok({
+      conversationId: String(params.convId),
+      assistantMessage: {
+        messageId: `MSG-MOCK-${Date.now()}`,
+        role: 'assistant',
+        content: `已根据你的要求更新《${base.title}》（V1.0）。`,
+        docVersion: 'V1.0',
+        createdAt: '2026-05-21T07:31:00Z',
+      },
+      document: { ...base, content: `${base.content}\n\n<!-- ${body.instruction} -->` },
+    });
+  }),
+  http.delete(`${api}/documents/conversations/:convId`, ({ params }) => {
+    const convId = String(params.convId);
+    const index = mockConversations.findIndex((c) => c.conversationId === convId);
+    if (index >= 0) mockConversations.splice(index, 1);
+    return ok({ conversationId: convId });
+  }),
   http.get(`${api}/documents`, ({ request }) => {
     const url = new URL(request.url);
     const type = url.searchParams.get('type');

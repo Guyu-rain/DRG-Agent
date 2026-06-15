@@ -13,7 +13,7 @@ DRG-Agent 是一个面向医保 DRG（疾病诊断相关分组）入组场景的
 | **DRG 入组智能体** | 根据电子病历和入组规则自动匹配输出 DRG 分组结果 |
 | **文档自动生成智能体** | 基于系统需求/代码/设计信息自动生成工程文档 |
 | **测试用例生成智能体** | 根据 DRG 规则自动构造正常/边界/异常测试用例 |
-| **虚拟文档系统** | 文档存储、版本管理、检索和提交记录 |
+| **虚拟文档系统** | 对话式（多轮迭代）生成工程文档，支持预览、编辑、版本管理与提交；产物统一存于根目录 `documents/` |
 
 ### 项目结构
 
@@ -34,6 +34,7 @@ DRG-Agent/
 │   ├── migrations/         # Alembic 数据库迁移
 │   └── tests/              # 后端测试
 ├── web/                    # 前端 (React + TypeScript + Ant Design)，详见 web/READMD.md
+├── documents/              # 运行时本地产物统一存储 (generated/ 生成文档, exports/ 导出, reports/ 报告)
 ├── docker-compose.yml      # Docker 服务编排 (PostgreSQL + Redis)
 ├── start.sh / stop.sh      # 一键启动 / 停止脚本
 └── README.md

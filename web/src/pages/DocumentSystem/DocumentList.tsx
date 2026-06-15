@@ -27,10 +27,10 @@ export function DocumentList() {
   return (
     <div>
       <PageHeader
-        title={`${docTypeLabels[(type as DocType) || 'requirements'] ?? '文档'}列表`}
+        title={type ? `${docTypeLabels[type as DocType] ?? '文档'}列表` : '全部文档'}
         extra={
           <Button type="primary" icon={<FileAddOutlined />} onClick={() => navigate('/docs')}>
-            生成文档
+            去对话生成
           </Button>
         }
       />

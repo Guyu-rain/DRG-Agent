@@ -12,10 +12,72 @@ from app.api.deps import get_db, pagination_params
 from app.core.config import settings
 from app.core.exceptions import BadRequestException, ErrorCode
 from app.schemas.common import ok, paginate
-from app.schemas.document import DocumentEditRequest, DocumentGenerateRequest, DocumentStatusUpdate
+from app.schemas.document import (
+    ConversationCreateRequest,
+    DocumentEditRequest,
+    DocumentGenerateRequest,
+    DocumentStatusUpdate,
+    MessageSendRequest,
+)
 from app.services.document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["文档系统"])
+
+
+# ----------------------------------------------------- 对话式文档生成
+# 注意: 以下 /conversations 路由必须定义在 /{doc_id} 之前, 否则会被其捕获。
+@router.post("/conversations", status_code=201, summary="创建文档对话会话")
+async def create_conversation(
+    payload: ConversationCreateRequest, db: AsyncSession = Depends(get_db)
+) -> dict:
+    service = DocumentService(db)
+    conv = await service.create_conversation(payload.title, payload.doc_type)
+    await db.commit()
+    return ok(service.to_conversation_summary(conv), message="会话已创建", code=201)
+
+
+@router.get("/conversations", summary="获取文档对话会话列表")
+async def list_conversations(
+    page_params: dict = Depends(pagination_params), db: AsyncSession = Depends(get_db)
+) -> dict:
+    service = DocumentService(db)
+    convs, total = await service.get_conversations(**page_params)
+    items = [service.to_conversation_summary(c) for c in convs]
+    return ok(paginate(items, total, page_params["page"], page_params["page_size"]))
+
+
+@router.get("/conversations/{conv_id}", summary="获取会话详情与消息")
+async def get_conversation(conv_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    service = DocumentService(db)
+    conv = await service.get_conversation(conv_id)
+    messages = await service.get_messages(conv_id)
+    document = None
+    if conv.document_id:
+        doc = await service.get_document(conv.document_id)
+        document = service.to_detail(doc)
+    return ok({
+        **service.to_conversation_summary(conv),
+        "messages": [service.to_message(m) for m in messages],
+        "document": document,
+    })
+
+
+@router.post("/conversations/{conv_id}/messages", summary="发送指令并生成/修订文档")
+async def send_message(
+    conv_id: str, payload: MessageSendRequest, db: AsyncSession = Depends(get_db)
+) -> dict:
+    service = DocumentService(db)
+    result = await service.send_message(conv_id, payload.instruction)
+    await db.commit()
+    return ok(result, message="文档已更新")
+
+
+@router.delete("/conversations/{conv_id}", summary="删除会话")
+async def delete_conversation(conv_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    service = DocumentService(db)
+    await service.delete_conversation(conv_id)
+    await db.commit()
+    return ok({"conversationId": conv_id}, message="会话已删除")
 
 
 @router.post("/generate", status_code=202, summary="生成文档")

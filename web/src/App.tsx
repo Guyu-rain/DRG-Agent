@@ -22,6 +22,7 @@ const router = createBrowserRouter([
       { path: 'drg', element: <DRGGrouping /> },
       { path: 'rules', element: <RuleManagement /> },
       { path: 'docs', element: <DocumentSystem /> },
+      { path: 'docs/all', element: <DocumentList /> },
       { path: 'docs/type/:type', element: <DocumentList /> },
       { path: 'docs/detail/:id', element: <DocumentDetail /> },
       { path: 'tests', element: <TestCase /> },

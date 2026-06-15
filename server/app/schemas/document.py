@@ -25,6 +25,15 @@ class DocumentStatusUpdate(CamelModel):
     status: str = Field(description="draft | review | submitted | archived")
 
 
+class ConversationCreateRequest(CamelModel):
+    title: str | None = None
+    doc_type: str | None = Field(default=None, description="可选文档类型标签")
+
+
+class MessageSendRequest(CamelModel):
+    instruction: str = Field(description="本轮对用户文档的指令 (新建/扩写/修订等)")
+
+
 class DocumentSection(CamelModel):
     id: str
     title: str

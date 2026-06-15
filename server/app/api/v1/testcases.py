@@ -76,7 +76,7 @@ async def get_test_task(test_task_id: str, db: AsyncSession = Depends(get_db)) -
 
 @router.get("/export/{filename}", summary="下载导出文件")
 async def download_export(filename: str) -> FileResponse:
-    file_path = settings.document_storage_dir / "exports" / filename
+    file_path = settings.document_exports_dir / filename
     if not file_path.exists():
         raise NotFoundException(ErrorCode.DOCUMENT_NOT_FOUND, f"导出文件不存在: {filename}")
     return FileResponse(file_path, filename=filename)

@@ -61,6 +61,45 @@ class DocumentVersion(Base):
     document = relationship("Document", back_populates="versions")
 
 
+class DocumentConversation(Base):
+    """文档生成会话。一个会话围绕一篇文档进行多轮对话式迭代。"""
+
+    __tablename__ = "document_conversations"
+
+    id = Column(String(40), primary_key=True, default=partial(generate_id, "CONV"))
+    title = Column(String(255), nullable=False, default="新文档对话")
+    doc_type = Column(String(30), nullable=True)  # 可选标签, 由用户选择或对话推断
+    document_id = Column(String(40), ForeignKey("documents.id"), nullable=True, index=True)
+    status = Column(String(20), nullable=False, default="active", index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    messages = relationship(
+        "DocumentMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="DocumentMessage.created_at",
+    )
+    document = relationship("Document")
+
+
+class DocumentMessage(Base):
+    """会话中的一条消息 (用户指令或助手回复)。"""
+
+    __tablename__ = "document_messages"
+
+    id = Column(String(40), primary_key=True, default=partial(generate_id, "MSG"))
+    conversation_id = Column(
+        String(40), ForeignKey("document_conversations.id"), nullable=False, index=True
+    )
+    role = Column(String(20), nullable=False)  # user | assistant
+    content = Column(Text, nullable=False, default="")
+    doc_version = Column(String(20), nullable=True)  # 该回复产出的文档版本
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+
+    conversation = relationship("DocumentConversation", back_populates="messages")
+
+
 class DocumentTask(Base):
     __tablename__ = "document_tasks"
 

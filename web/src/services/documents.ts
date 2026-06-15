@@ -1,6 +1,9 @@
 import { request } from './api';
 import type { ApiResponse, PaginationResponse } from '@/types/api';
 import type {
+  ConversationDetail,
+  DocType,
+  DocumentConversationSummary,
   DocumentDetail,
   DocumentGenerateRequest,
   DocumentStatus,
@@ -8,6 +11,7 @@ import type {
   DocumentSummary,
   DocumentTaskResponse,
   DocumentVersion,
+  SendMessageResponse,
 } from '@/types/document';
 
 export const documentsApi = {
@@ -34,4 +38,34 @@ export const documentsApi = {
     request<ApiResponse<DocumentDetail>>({ method: 'PATCH', url: `/documents/${docId}/status`, data: { status } }),
   remove: (docId: string) =>
     request<ApiResponse<{ docId: string }>>({ method: 'DELETE', url: `/documents/${docId}` }),
+
+  // ----------------------------------------------------- 对话式文档生成
+  createConversation: (data: { title?: string; docType?: DocType | null }) =>
+    request<ApiResponse<DocumentConversationSummary>>({
+      method: 'POST',
+      url: '/documents/conversations',
+      data,
+    }),
+  listConversations: (params?: Record<string, unknown>) =>
+    request<ApiResponse<PaginationResponse<DocumentConversationSummary>>>({
+      method: 'GET',
+      url: '/documents/conversations',
+      params,
+    }),
+  conversation: (convId: string) =>
+    request<ApiResponse<ConversationDetail>>({
+      method: 'GET',
+      url: `/documents/conversations/${convId}`,
+    }),
+  sendMessage: (convId: string, instruction: string) =>
+    request<ApiResponse<SendMessageResponse>>({
+      method: 'POST',
+      url: `/documents/conversations/${convId}/messages`,
+      data: { instruction },
+    }),
+  removeConversation: (convId: string) =>
+    request<ApiResponse<{ conversationId: string }>>({
+      method: 'DELETE',
+      url: `/documents/conversations/${convId}`,
+    }),
 };

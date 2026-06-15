@@ -15,6 +15,7 @@ from app.agents.document_gen import (
     context_collect_agent,
     document_generate_agent,
     format_output_agent,
+    generate_document_chat,
     save_document_agent,
 )
 from app.agents.explain import explain_agent, explain_failure_agent
@@ -189,6 +190,18 @@ class AgentOrchestrator:
             "status": "running",
         }
         return self._document_graph.invoke(initial)
+
+    def execute_document_chat(
+        self,
+        instruction: str,
+        current_document: str = "",
+        history: list[dict] | None = None,
+        doc_type: str | None = None,
+    ) -> str:
+        """对话式生成/修订文档, 返回最新完整 Markdown 全文。"""
+        return generate_document_chat(
+            self.llm_client, instruction, current_document, history, doc_type
+        )
 
     # ----------------------------------------------------- 测试用例生成工作流
     def build_test_gen_workflow(self):

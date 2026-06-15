@@ -51,8 +51,14 @@ class LLMClient:
         temperature: float = 0.3,
         max_tokens: int = 4096,
         max_retries: int = 3,
+        messages: list[dict] | None = None,
     ) -> str:
         """调用 LLM 并返回文本。失败时按指数退避 (1s, 2s, 4s) 重试。
+
+        Args:
+            prompt: 单轮提示词 (当 ``messages`` 未提供时使用)。
+            messages: 多轮对话消息列表 (``[{"role", "content"}, ...]``)，
+                提供时优先于 ``prompt``，用于对话式文档生成。
 
         Raises:
             RuntimeError: 重试耗尽后仍失败。
@@ -62,13 +68,14 @@ class LLMClient:
 
         model = model or self.default_model
         client = self._ensure_client()
+        chat_messages = messages or [{"role": "user", "content": prompt}]
         last_error: Exception | None = None
 
         for attempt in range(max_retries):
             try:
                 response = client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=chat_messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
@@ -108,6 +115,9 @@ class MockLLMClient:
 
     def call(self, prompt: str, **kwargs) -> str:
         self.call_count += 1
+        messages = kwargs.get("messages")
+        if messages:
+            prompt = "\n".join(str(m.get("content", "")) for m in messages)
         self.last_prompt = prompt
         for keyword, response in self.responses.items():
             if keyword in prompt:

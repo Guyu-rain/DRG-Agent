@@ -18,7 +18,13 @@ from app.models.base import (
 )
 from app.models.case import PatientCase
 from app.models.config import SystemConfig
-from app.models.document import Document, DocumentTask, DocumentVersion
+from app.models.document import (
+    Document,
+    DocumentConversation,
+    DocumentMessage,
+    DocumentTask,
+    DocumentVersion,
+)
 from app.models.grouping import GroupingResult, GroupingTask, TaskStep
 from app.models.log import ExecutionLog
 from app.models.rule import RuleVersion
@@ -47,6 +53,8 @@ __all__ = [
     "Document",
     "DocumentVersion",
     "DocumentTask",
+    "DocumentConversation",
+    "DocumentMessage",
     "TestCase",
     "TestTask",
     "ExecutionLog",

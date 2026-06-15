@@ -231,7 +231,7 @@ class TestCaseService:
         """导出测试用例为 Excel 文件, 返回下载 URL。"""
         from openpyxl import Workbook
 
-        export_dir = settings.document_storage_dir / "exports"
+        export_dir = settings.document_exports_dir
         export_dir.mkdir(parents=True, exist_ok=True)
 
         workbook = Workbook()

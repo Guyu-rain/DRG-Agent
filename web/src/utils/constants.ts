@@ -30,6 +30,7 @@ export const docTypeLabels: Record<DocType, string> = {
   meeting_minutes: '会议纪要',
   management: '项目管理',
   configuration: '配置管理',
+  general: '通用文档',
 };
 
 export const docStatusLabels: Record<DocumentStatus, string> = {

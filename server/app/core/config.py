@@ -33,8 +33,8 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     TASKS_EAGER: bool = False
 
-    # Storage
-    DOCUMENT_STORAGE_PATH: str = "./server/documents"
+    # Storage —— 所有本地产物统一收纳到仓库根目录 ./documents 下并按内容分类
+    DOCUMENT_STORAGE_PATH: str = "./documents"
     RULE_DATA_PATH: str = "./server/data/rules"
 
     # Server
@@ -53,9 +53,19 @@ class Settings(BaseSettings):
 
     @property
     def document_storage_dir(self) -> Path:
-        """生成文档的绝对存储目录。"""
+        """本地产物的绝对存储根目录 (默认仓库根 ./documents)。"""
         path = Path(self.DOCUMENT_STORAGE_PATH)
         return path if path.is_absolute() else (_REPO_ROOT / path).resolve()
+
+    @property
+    def document_generated_dir(self) -> Path:
+        """对话生成的工程文档存储目录 (documents/generated)。"""
+        return self.document_storage_dir / "generated"
+
+    @property
+    def document_exports_dir(self) -> Path:
+        """测试用例等导出文件存储目录 (documents/exports)。"""
+        return self.document_storage_dir / "exports"
 
     @property
     def rule_data_dir(self) -> Path:

@@ -567,3 +567,223 @@ code,
     padding: var(--s-5);
   }
 }
+
+/* ============================ 虚拟文档系统 · 对话工作台 ============================ */
+.doc-chat {
+  display: grid;
+  grid-template-columns: 232px minmax(360px, 1fr) minmax(380px, 1.1fr);
+  gap: var(--s-4);
+  height: calc(100vh - 132px);
+  min-height: 520px;
+}
+
+.doc-chat__sidebar,
+.doc-chat__main,
+.doc-chat__preview {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-paper);
+  min-width: 0;
+}
+
+.doc-chat__sidebar {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s-4);
+}
+
+.doc-chat__conv-list {
+  margin-top: var(--s-3);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.doc-chat__hint {
+  color: var(--ink-mute);
+  font-size: 13px;
+  text-align: center;
+  margin-top: var(--s-5);
+}
+
+.doc-chat__conv {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  transition: background var(--t-med) var(--ease-out);
+}
+
+.doc-chat__conv:hover {
+  background: var(--sage-faint);
+}
+
+.doc-chat__conv.is-active {
+  background: var(--sage-faint);
+  border-color: var(--sage-soft);
+  color: var(--sage-deep);
+}
+
+.doc-chat__conv-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-chat__conv-del {
+  opacity: 0;
+  color: var(--ink-mute);
+  transition: opacity var(--t-med) var(--ease-out);
+}
+
+.doc-chat__conv:hover .doc-chat__conv-del {
+  opacity: 0.7;
+}
+
+.doc-chat__conv-del:hover {
+  opacity: 1;
+  color: var(--danger, #b6553a);
+}
+
+/* 对话区 */
+.doc-chat__main {
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-chat__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.doc-chat__welcome {
+  margin: auto;
+  text-align: center;
+  color: var(--ink-3);
+  max-width: 560px;
+}
+
+.doc-chat__welcome h2 {
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.doc-chat__quick {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
+  color: var(--ink-2);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  transition: border-color var(--t-med) var(--ease-out), background var(--t-med) var(--ease-out);
+}
+
+.doc-chat__quick:hover {
+  border-color: var(--sage);
+  background: var(--sage-faint);
+}
+
+.doc-chat__bubble {
+  max-width: 82%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.doc-chat__bubble--user {
+  align-self: flex-end;
+  background: var(--sage);
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+
+.doc-chat__bubble--assistant {
+  align-self: flex-start;
+  background: var(--paper-3);
+  color: var(--ink);
+  border-bottom-left-radius: 3px;
+}
+
+.doc-chat__ver {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.35);
+  font-size: 11px;
+}
+
+.doc-chat__bubble--assistant .doc-chat__ver {
+  background: var(--sage-faint);
+  color: var(--sage-deep);
+}
+
+.doc-chat__composer {
+  border-top: 1px solid var(--rule);
+  padding: var(--s-4);
+}
+
+.doc-chat__composer-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+/* 文档预览 */
+.doc-chat__preview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.doc-chat__preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.doc-chat__preview-head h3 {
+  margin: 0 0 6px;
+  color: var(--ink);
+}
+
+.doc-chat__preview-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s-5);
+}
+
+@media (max-width: 1200px) {
+  .doc-chat {
+    grid-template-columns: 200px 1fr;
+    height: auto;
+  }
+  .doc-chat__preview {
+    grid-column: 1 / -1;
+    min-height: 420px;
+  }
+}

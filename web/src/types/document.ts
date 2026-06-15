@@ -1,4 +1,11 @@
-export type DocType = 'requirements' | 'design' | 'testing' | 'meeting_minutes' | 'management' | 'configuration';
+export type DocType =
+  | 'requirements'
+  | 'design'
+  | 'testing'
+  | 'meeting_minutes'
+  | 'management'
+  | 'configuration'
+  | 'general';
 export type DocumentStatus = 'draft' | 'review' | 'submitted' | 'archived';
 
 export interface DocumentGenerateRequest {
@@ -50,6 +57,37 @@ export interface DocumentVersion {
   changeDescription?: string;
   createdAt: string;
   createdBy?: string;
+}
+
+// ----------------------------------------------------- 对话式文档生成
+
+export interface DocumentConversationSummary {
+  conversationId: string;
+  title: string;
+  docType?: DocType | null;
+  documentId?: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentMessage {
+  messageId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  docVersion?: string | null;
+  createdAt: string;
+}
+
+export interface ConversationDetail extends DocumentConversationSummary {
+  messages: DocumentMessage[];
+  document: DocumentDetail | null;
+}
+
+export interface SendMessageResponse {
+  conversationId: string;
+  assistantMessage: DocumentMessage;
+  document: DocumentDetail;
 }
 
 export interface DocumentSubmitResponse {

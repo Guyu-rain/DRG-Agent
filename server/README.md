@@ -57,11 +57,12 @@ server/
 │   ├── schemas/       # Pydantic 请求/响应模型（camelCase）
 │   ├── services/      # 业务服务层
 │   └── tasks/         # Celery 任务定义
-├── data/rules/        # 内置演示规则文件 demo_rules.json
+├── data/rules/        # 内置演示规则文件 demo_rules.json（输入数据，保留原位）
 ├── migrations/        # Alembic 数据库迁移
 ├── tests/             # pytest 测试（test_engine / test_services / test_api / test_integration）
-├── documents/         # 运行时生成的文档（gitignore）
 └── main.py            # FastAPI 应用入口
+
+# 运行时产物统一存放于仓库根目录 ../documents/（generated / exports / reports）
 ```
 
 ---
@@ -97,7 +98,7 @@ cp .env.example .env
 | `LLM_MODEL` | `deepseek-chat` |
 | `DATABASE_URL` | `postgresql+asyncpg://drgagent:drgagent_dev@localhost:5432/drg_agent` |
 | `REDIS_URL` | `redis://localhost:6379/0` |
-| `DOCUMENT_STORAGE_PATH` | 生成文档的存储目录 |
+| `DOCUMENT_STORAGE_PATH` | 本地产物存储根目录（默认仓库根 `./documents`，含 generated/exports/reports） |
 
 ---
 

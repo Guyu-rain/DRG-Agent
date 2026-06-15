@@ -9,9 +9,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ErrorCode, NotFoundException
 from app.core.logging import logger
-from app.models import Document, DocumentTask, DocumentVersion, ExecutionLog, utcnow
+from app.models import (
+    Document,
+    DocumentConversation,
+    DocumentMessage,
+    DocumentTask,
+    DocumentVersion,
+    ExecutionLog,
+    utcnow,
+)
 
 _VALID_STATUS = ["draft", "review", "submitted", "archived"]
+
+
+def _extract_title(content: str, default: str) -> str:
+    """从 Markdown 提取首个一级标题作为文档标题。"""
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped[2:].strip()[:255] or default
+    return default
+
+
+def _bump_version(version: str) -> str:
+    """V1.0 -> V1.1 版本号递增。"""
+    try:
+        major, minor = version.lstrip("V").split(".")
+        return f"V{major}.{int(minor) + 1}"
+    except (ValueError, AttributeError):
+        return "V1.1"
 
 
 class DocumentService:
@@ -145,12 +171,7 @@ class DocumentService:
             doc.content = content
         if title is not None:
             doc.title = title
-        # 版本号递增 V1.0 -> V1.1
-        try:
-            major, minor = doc.version.lstrip("V").split(".")
-            doc.version = f"V{major}.{int(minor) + 1}"
-        except (ValueError, AttributeError):
-            doc.version = "V1.1"
+        doc.version = _bump_version(doc.version)
         await self.db.flush()
         return doc
 
@@ -159,7 +180,7 @@ class DocumentService:
         from app.agents.submit import submit_document as submit_to_storage
 
         doc = await self.get_document(doc_id)
-        record = submit_to_storage(doc.id, doc.doc_type, doc.content, doc.version)
+        record = submit_to_storage(doc.id, doc.doc_type, doc.content, doc.version, doc.title)
         doc.status = "submitted"
         doc.submitted_at = record["submitted_at"]
         doc.file_path = record["file_path"]
@@ -221,7 +242,148 @@ class DocumentService:
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
+    # ----------------------------------------------------- 对话式文档生成
+    async def create_conversation(
+        self, title: str | None = None, doc_type: str | None = None
+    ) -> DocumentConversation:
+        conv = DocumentConversation(
+            title=title or "新文档对话", doc_type=doc_type, status="active"
+        )
+        self.db.add(conv)
+        await self.db.flush()
+        return conv
+
+    async def get_conversation(self, conv_id: str) -> DocumentConversation:
+        conv = await self.db.get(DocumentConversation, conv_id)
+        if conv is None:
+            raise NotFoundException(
+                ErrorCode.DOCUMENT_NOT_FOUND, f"文档会话不存在: {conv_id}"
+            )
+        return conv
+
+    async def get_conversations(
+        self, page: int = 1, page_size: int = 20
+    ) -> tuple[list[DocumentConversation], int]:
+        total = (
+            await self.db.execute(
+                select(func.count()).select_from(DocumentConversation)
+            )
+        ).scalar_one()
+        stmt = (
+            select(DocumentConversation)
+            .order_by(DocumentConversation.updated_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        rows = list((await self.db.execute(stmt)).scalars().all())
+        return rows, total
+
+    async def get_messages(self, conv_id: str) -> list[DocumentMessage]:
+        await self.get_conversation(conv_id)
+        stmt = (
+            select(DocumentMessage)
+            .where(DocumentMessage.conversation_id == conv_id)
+            .order_by(DocumentMessage.created_at)
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def send_message(self, conv_id: str, instruction: str) -> dict:
+        """在会话中追加一轮指令, 生成/修订当前文档, 返回助手消息与最新文档。"""
+        from app.agents import get_orchestrator
+
+        conv = await self.get_conversation(conv_id)
+        history = await self.get_messages(conv_id)
+
+        self.db.add(DocumentMessage(
+            conversation_id=conv_id, role="user", content=instruction,
+        ))
+
+        doc = await self.db.get(Document, conv.document_id) if conv.document_id else None
+        current_content = doc.content if doc else ""
+        history_payload = [{"role": m.role, "content": m.content} for m in history]
+
+        new_content = await asyncio.to_thread(
+            get_orchestrator().execute_document_chat,
+            instruction, current_content, history_payload, conv.doc_type,
+        )
+
+        if doc is None:
+            default_title = conv.title if conv.title != "新文档对话" else instruction[:40]
+            title = _extract_title(new_content, default_title)
+            doc = Document(
+                doc_type=conv.doc_type or "general",
+                title=title,
+                content=new_content,
+                original_content=new_content,
+                status="draft",
+                generated_by="文档对话智能体",
+                metadata_json={
+                    "generatedAt": utcnow().isoformat(),
+                    "modelUsed": "deepseek-chat",
+                    "conversationId": conv_id,
+                },
+                sections=[{"id": "sec-1", "title": "正文", "status": "generated"}],
+            )
+            self.db.add(doc)
+            await self.db.flush()
+            conv.document_id = doc.id
+            if conv.title == "新文档对话":
+                conv.title = doc.title
+        else:
+            self.db.add(DocumentVersion(
+                document_id=doc.id, version=doc.version,
+                content_snapshot=doc.content, change_description=f"对话修订前快照: {instruction[:60]}",
+            ))
+            doc.content = new_content
+            doc.title = _extract_title(new_content, doc.title)
+            doc.version = _bump_version(doc.version)
+
+        assistant_text = (
+            f"已根据你的要求更新《{doc.title}》（{doc.version}），"
+            f"可在右侧预览，或继续告诉我需要调整的地方。"
+        )
+        message = DocumentMessage(
+            conversation_id=conv_id, role="assistant",
+            content=assistant_text, doc_version=doc.version,
+        )
+        self.db.add(message)
+        conv.updated_at = utcnow()
+        await self.db.flush()
+
+        return {
+            "conversationId": conv_id,
+            "assistantMessage": self.to_message(message),
+            "document": self.to_detail(doc),
+        }
+
+    async def delete_conversation(self, conv_id: str) -> None:
+        conv = await self.get_conversation(conv_id)
+        await self.db.delete(conv)
+        await self.db.flush()
+
     # --------------------------------------------------------------- 序列化
+    @staticmethod
+    def to_conversation_summary(conv: DocumentConversation) -> dict:
+        return {
+            "conversationId": conv.id,
+            "title": conv.title,
+            "docType": conv.doc_type,
+            "documentId": conv.document_id,
+            "status": conv.status,
+            "createdAt": conv.created_at,
+            "updatedAt": conv.updated_at,
+        }
+
+    @staticmethod
+    def to_message(msg: DocumentMessage) -> dict:
+        return {
+            "messageId": msg.id,
+            "role": msg.role,
+            "content": msg.content,
+            "docVersion": msg.doc_version,
+            "createdAt": msg.created_at,
+        }
+
     @staticmethod
     def to_summary(doc: Document) -> dict:
         return {
