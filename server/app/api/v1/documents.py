@@ -18,6 +18,7 @@ from app.schemas.document import (
     DocumentGenerateRequest,
     DocumentStatusUpdate,
     MessageSendRequest,
+    QaSendRequest,
 )
 from app.services.document_service import DocumentService
 
@@ -70,6 +71,50 @@ async def send_message(
     result = await service.send_message(conv_id, payload.instruction)
     await db.commit()
     return ok(result, message="文档已更新")
+
+
+# ----------------------------------------------------- Q&A 模式
+@router.post("/qa/conversations", status_code=201, summary="创建 Q&A 对话会话")
+async def create_qa_conversation(
+    payload: ConversationCreateRequest | None = None, db: AsyncSession = Depends(get_db)
+) -> dict:
+    service = DocumentService(db)
+    title = payload.title if payload else None
+    conv = await service.create_conversation(title=title, mode="qa")
+    await db.commit()
+    return ok(service.to_conversation_summary(conv), message="Q&A 会话已创建", code=201)
+
+
+@router.get("/qa/conversations", summary="获取 Q&A 对话会话列表")
+async def list_qa_conversations(
+    page_params: dict = Depends(pagination_params), db: AsyncSession = Depends(get_db)
+) -> dict:
+    service = DocumentService(db)
+    convs, total = await service.get_conversations(**page_params)
+    qa_convs = [c for c in convs if c.mode == "qa"]
+    items = [service.to_conversation_summary(c) for c in qa_convs]
+    return ok(paginate(items, len(items), 1, 50))
+
+
+@router.get("/qa/conversations/{conv_id}", summary="获取 Q&A 会话详情与消息")
+async def get_qa_conversation(conv_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    service = DocumentService(db)
+    conv = await service.get_conversation(conv_id)
+    messages = await service.get_messages(conv_id)
+    return ok({
+        **service.to_conversation_summary(conv),
+        "messages": [service.to_message(m) for m in messages],
+    })
+
+
+@router.post("/qa/conversations/{conv_id}/messages", summary="发送 Q&A 问题")
+async def send_qa_message(
+    conv_id: str, payload: QaSendRequest, db: AsyncSession = Depends(get_db)
+) -> dict:
+    service = DocumentService(db)
+    result = await service.send_qa_message(conv_id, payload.instruction)
+    await db.commit()
+    return ok(result, message="回答已生成")
 
 
 @router.delete("/conversations/{conv_id}", summary="删除会话")

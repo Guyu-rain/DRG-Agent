@@ -66,6 +66,7 @@ export interface DocumentConversationSummary {
   title: string;
   docType?: DocType | null;
   documentId?: string | null;
+  mode: 'doc_chat' | 'qa';
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -100,4 +101,10 @@ export interface DocumentSubmitResponse {
     filePath: string;
     checksum: string;
   };
+}
+
+// ----------------------------------------------------- Q&A 模式
+export interface QaSendResponse {
+  conversationId: string;
+  assistantMessage: DocumentMessage;
 }

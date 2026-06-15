@@ -16,6 +16,7 @@ from app.agents.document_gen import (
     document_generate_agent,
     format_output_agent,
     generate_document_chat,
+    generate_qa_answer,
     save_document_agent,
 )
 from app.agents.explain import explain_agent, explain_failure_agent
@@ -202,6 +203,14 @@ class AgentOrchestrator:
         return generate_document_chat(
             self.llm_client, instruction, current_document, history, doc_type
         )
+
+    def execute_qa(
+        self,
+        instruction: str,
+        history: list[dict] | None = None,
+    ) -> str:
+        """问答模式: 查阅源码回答技术问题, 不修改文档。"""
+        return generate_qa_answer(self.llm_client, instruction, history)
 
     # ----------------------------------------------------- 测试用例生成工作流
     def build_test_gen_workflow(self):

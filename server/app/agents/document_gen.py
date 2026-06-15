@@ -1,4 +1,9 @@
-"""文档生成智能体 (LLM + 模板)。参照 plans/06_agent_workflow.md §3。"""
+"""文档生成智能体 (LLM + 模板)。参照 plans/06_agent_workflow.md §3。
+
+提供两个入口:
+- generate_document_chat(): 文档生成模式, 维护整篇文档全文
+- generate_qa_answer(): 问答模式, 仅回答问题, 不修改文档
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ import json
 
 from app.agents.state import DocumentGenState
 from app.core.logging import logger
-from app.llm import render_prompt
+from app.llm import SOURCE_TOOLS, render_prompt
 
 # doc_type -> prompt 模板名
 _TEMPLATE_MAP = {
@@ -27,9 +32,11 @@ _TYPE_HINT = {
     "风险管理、过程记录。\n\n",
     "configuration": "本次文档类型为《配置管理文档》，建议涵盖配置项标识、"
     "版本控制策略、变更流程、基线管理。\n\n",
+    "general": "本次文档类型为通用工程文档，请根据用户指令自行决定文档结构与内容。\n\n",
 }
 
 
+# ----------------------------------------------------------------- 文档生成模式
 def generate_document_chat(
     llm_client,  # noqa: ANN001
     instruction: str,
@@ -39,12 +46,7 @@ def generate_document_chat(
 ) -> str:
     """对话式生成/修订文档, 返回最新完整 Markdown 全文。
 
-    Args:
-        llm_client: LLM 客户端 (可为 None, 此时走降级)。
-        instruction: 本轮用户指令。
-        current_document: 当前文档全文 (空表示新建)。
-        history: 既往对话消息 [{"role", "content"}, ...] (不含本轮 instruction)。
-        doc_type: 可选文档类型标签, 用于补充结构性提示。
+    启用 Function Calling, LLM 可主动调工具查阅项目源码。
     """
     system_prompt = render_prompt(
         "document_chat",
@@ -63,7 +65,13 @@ def generate_document_chat(
     if llm_client is None:
         return fallback
     try:
-        content = llm_client.call(prompt=instruction, messages=messages, max_tokens=6000)
+        content = llm_client.call(
+            messages=messages,
+            tools=SOURCE_TOOLS,
+            tool_choice="auto",
+            temperature=0.3,
+            max_tokens=6000,
+        )
         return content.strip() or fallback
     except Exception as exc:  # noqa: BLE001
         logger.error(f"对话式文档生成失败, 使用降级输出: {exc}")
@@ -87,12 +95,44 @@ def _chat_fallback(instruction: str, current_document: str, doc_type: str | None
     )
 
 
-def context_collect_agent(state: DocumentGenState) -> dict:
-    """收集文档生成所需上下文。
+# ----------------------------------------------------------------- 问答模式
+def generate_qa_answer(
+    llm_client,  # noqa: ANN001
+    instruction: str,
+    history: list[dict] | None = None,
+) -> str:
+    """问答模式: 查阅源码回答问题, 不修改文档。
 
-    数据库相关上下文由服务层预先收集并通过 state['context'] 传入,
-    本节点负责补充系统级静态信息。
+    启用 Function Calling, LLM 可主动调工具查阅项目源码。
     """
+    system_prompt = render_prompt("document_qa")
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    for msg in history or []:
+        role = msg.get("role")
+        content = msg.get("content") or ""
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": instruction})
+
+    if llm_client is None:
+        return "LLM 不可用，请检查 API Key 配置。"
+    try:
+        content = llm_client.call(
+            messages=messages,
+            tools=SOURCE_TOOLS,
+            tool_choice="auto",
+            temperature=0.3,
+            max_tokens=6000,
+        )
+        return content.strip() or "（未获取到回答）"
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"问答模式执行失败: {exc}")
+        return f"问答失败: {exc}"
+
+
+# ------------------------------------------------------------- 原有模板生成 (保持兼容)
+def context_collect_agent(state: DocumentGenState) -> dict:
+    """收集文档生成所需上下文。"""
     context = dict(state.get("context") or {})
     context.setdefault("system_description", "DRG-Agent 医保 DRG 入组智能体系统")
     context.setdefault(

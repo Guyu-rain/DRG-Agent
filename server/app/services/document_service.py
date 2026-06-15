@@ -244,10 +244,10 @@ class DocumentService:
 
     # ----------------------------------------------------- 对话式文档生成
     async def create_conversation(
-        self, title: str | None = None, doc_type: str | None = None
+        self, title: str | None = None, doc_type: str | None = None, mode: str = "doc_chat"
     ) -> DocumentConversation:
         conv = DocumentConversation(
-            title=title or "新文档对话", doc_type=doc_type, status="active"
+            title=title or "新文档对话", doc_type=doc_type, mode=mode, status="active"
         )
         self.db.add(conv)
         await self.db.flush()
@@ -356,6 +356,36 @@ class DocumentService:
             "document": self.to_detail(doc),
         }
 
+    async def send_qa_message(self, conv_id: str, instruction: str) -> dict:
+        """在 Q&A 会话中追加一轮问答, 返回助手消息 (不创建/修改文档)。"""
+        from app.agents import get_orchestrator
+
+        conv = await self.get_conversation(conv_id)
+        history = await self.get_messages(conv_id)
+
+        self.db.add(DocumentMessage(
+            conversation_id=conv_id, role="user", content=instruction,
+        ))
+
+        history_payload = [{"role": m.role, "content": m.content} for m in history]
+
+        answer = await asyncio.to_thread(
+            get_orchestrator().execute_qa,
+            instruction, history_payload,
+        )
+
+        message = DocumentMessage(
+            conversation_id=conv_id, role="assistant", content=answer,
+        )
+        self.db.add(message)
+        conv.updated_at = utcnow()
+        await self.db.flush()
+
+        return {
+            "conversationId": conv_id,
+            "assistantMessage": self.to_message(message),
+        }
+
     async def delete_conversation(self, conv_id: str) -> None:
         conv = await self.get_conversation(conv_id)
         await self.db.delete(conv)
@@ -369,6 +399,7 @@ class DocumentService:
             "title": conv.title,
             "docType": conv.doc_type,
             "documentId": conv.document_id,
+            "mode": conv.mode,
             "status": conv.status,
             "createdAt": conv.created_at,
             "updatedAt": conv.updated_at,

@@ -33,4 +33,20 @@ describe('DocumentSystem (对话工作台)', () => {
       await screen.findByRole('button', { name: /提\s*交/ }, { timeout: 3000 }),
     ).toBeInTheDocument();
   });
+
+  it('renders QA answer markdown (bold + table) properly', async () => {
+    renderPage();
+    // 切到问答 Tab
+    await userEvent.click(await screen.findByRole('tab', { name: /问答/ }));
+    const input = await screen.findByPlaceholderText(/输入你的技术问题/);
+    await userEvent.type(input, 'MDC 匹配怎么实现');
+    await userEvent.click(screen.getByRole('button', { name: /发送/ }));
+
+    // 助手回答的 Markdown 被渲染为真正的元素: 加粗 <strong> 与表格
+    const strong = await screen.findByText('MDC 匹配', { selector: 'strong' }, { timeout: 3000 });
+    expect(strong).toBeInTheDocument();
+    expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '文件' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'grouping_engine.py' })).toBeInTheDocument();
+  });
 });

@@ -11,6 +11,7 @@ import type {
   DocumentSummary,
   DocumentTaskResponse,
   DocumentVersion,
+  QaSendResponse,
   SendMessageResponse,
 } from '@/types/document';
 
@@ -67,5 +68,29 @@ export const documentsApi = {
     request<ApiResponse<{ conversationId: string }>>({
       method: 'DELETE',
       url: `/documents/conversations/${convId}`,
+    }),
+
+  // ----------------------------------------------------- Q&A 模式
+  createQaConversation: (data?: { title?: string }) =>
+    request<ApiResponse<DocumentConversationSummary>>({
+      method: 'POST',
+      url: '/documents/qa/conversations',
+      data,
+    }),
+  listQaConversations: () =>
+    request<ApiResponse<PaginationResponse<DocumentConversationSummary>>>({
+      method: 'GET',
+      url: '/documents/qa/conversations',
+    }),
+  qaConversation: (convId: string) =>
+    request<ApiResponse<ConversationDetail>>({
+      method: 'GET',
+      url: `/documents/qa/conversations/${convId}`,
+    }),
+  sendQaMessage: (convId: string, instruction: string) =>
+    request<ApiResponse<QaSendResponse>>({
+      method: 'POST',
+      url: `/documents/qa/conversations/${convId}/messages`,
+      data: { instruction },
     }),
 };

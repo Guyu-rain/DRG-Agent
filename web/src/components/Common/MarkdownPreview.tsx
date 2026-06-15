@@ -1,45 +1,34 @@
-import { Table, Typography } from 'antd';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-/** 轻量 Markdown 预览: 支持标题、列表、表格、段落。供文档详情与对话工作台共用。 */
+/**
+ * 基于 react-markdown + GFM 的 Markdown 渲染器。
+ * 同时用于文档预览与对话气泡；所有排版由 index.css 中的 .md-body 规则统一控制，
+ * 紧凑（气泡）/宽松（预览）通过父容器附加 .md-compact 区分。
+ */
+const components: Components = {
+  // 外链安全打开
+  a: ({ node, ...props }) => {
+    void node;
+    return <a {...props} target="_blank" rel="noreferrer" />;
+  },
+  // 表格包一层容器以便横向滚动
+  table: ({ node, ...props }) => {
+    void node;
+    return (
+      <div className="md-table-wrap">
+        <table {...props} />
+      </div>
+    );
+  },
+};
+
 export function MarkdownPreview({ content }: { content: string }) {
-  const lines = content.split('\n');
-  const nodes: React.ReactNode[] = [];
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    const next = lines[index + 1];
-    if (line.includes('|') && next && /^\s*\|?[\s:-]+\|/.test(next)) {
-      const headers = line.split('|').map((cell) => cell.trim()).filter(Boolean);
-      const rows: string[][] = [];
-      index += 2;
-      while (index < lines.length && lines[index].includes('|')) {
-        rows.push(lines[index].split('|').map((cell) => cell.trim()).filter(Boolean));
-        index += 1;
-      }
-      index -= 1;
-      nodes.push(
-        <Table
-          key={`table-${index}`}
-          size="small"
-          pagination={false}
-          dataSource={rows.map((row, rowIndex) => ({ key: rowIndex, row }))}
-          columns={headers.map((header, columnIndex) => ({
-            title: header,
-            render: (_: unknown, record: { row: string[] }) => record.row[columnIndex] ?? '',
-          }))}
-        />,
-      );
-    } else if (line.startsWith('# ')) {
-      nodes.push(<Typography.Title key={index}>{line.slice(2)}</Typography.Title>);
-    } else if (line.startsWith('## ')) {
-      nodes.push(<Typography.Title level={3} key={index}>{line.slice(3)}</Typography.Title>);
-    } else if (line.startsWith('### ')) {
-      nodes.push(<Typography.Title level={4} key={index}>{line.slice(4)}</Typography.Title>);
-    } else if (line.startsWith('- ')) {
-      nodes.push(<Typography.Paragraph key={index}>• {line.slice(2)}</Typography.Paragraph>);
-    } else {
-      nodes.push(line ? <Typography.Paragraph key={index}>{line}</Typography.Paragraph> : <br key={index} />);
-    }
-  }
-  return <>{nodes}</>;
+  return (
+    <div className="md-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {content || ''}
+      </ReactMarkdown>
+    </div>
+  );
 }

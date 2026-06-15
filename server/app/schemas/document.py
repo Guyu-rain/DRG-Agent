@@ -34,6 +34,22 @@ class MessageSendRequest(CamelModel):
     instruction: str = Field(description="本轮对用户文档的指令 (新建/扩写/修订等)")
 
 
+class QaSendRequest(CamelModel):
+    instruction: str = Field(description="用户的技术问题")
+
+
+class QaMessage(CamelModel):
+    message_id: str
+    role: str
+    content: str
+    created_at: str
+
+
+class QaSendResponse(CamelModel):
+    assistant_message: QaMessage
+    conversation_id: str | None = None
+
+
 class DocumentSection(CamelModel):
     id: str
     title: str
