@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
+import json
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, pagination_params
 from app.core.config import settings
 from app.core.exceptions import BadRequestException, ErrorCode
+from app.core.logging import logger
 from app.schemas.common import ok, paginate
 from app.schemas.document import (
     ConversationCreateRequest,
@@ -115,6 +119,102 @@ async def send_qa_message(
     result = await service.send_qa_message(conv_id, payload.instruction)
     await db.commit()
     return ok(result, message="回答已生成")
+
+
+@router.post("/qa/conversations/{conv_id}/messages/stream", summary="流式发送 Q&A 问题")
+async def stream_qa_message(
+    conv_id: str, payload: QaSendRequest, db: AsyncSession = Depends(get_db)
+) -> StreamingResponse:
+    """流式返回结构化思考摘要和最终回答，不暴露模型原始思维链。"""
+    service = DocumentService(db)
+    conv, history_payload = await service.prepare_qa_message(conv_id)
+
+    def encode_event(payload: dict) -> str:
+        return json.dumps(payload, ensure_ascii=False, default=str) + "\n"
+
+    async def event_stream() -> AsyncIterator[str]:
+        steps = [
+            {
+                "id": "understand",
+                "title": "理解问题",
+                "detail": "识别问题范围、关键术语和需要核对的实现点。",
+                "status": "completed",
+            },
+            {
+                "id": "inspect",
+                "title": "查阅项目实现",
+                "detail": "正在检索相关源码、接口和配置。",
+                "status": "running",
+            },
+            {
+                "id": "compose",
+                "title": "组织回答",
+                "detail": "等待源码分析完成后整理结论。",
+                "status": "pending",
+            },
+        ]
+
+        try:
+            yield encode_event({
+                "type": "reasoning",
+                "summary": {"status": "thinking", "steps": steps},
+            })
+
+            answer = await service.generate_qa_answer(payload.instruction, history_payload)
+            steps[1] = {
+                **steps[1],
+                "detail": "已完成相关源码、接口和配置的检索与核对。",
+                "status": "completed",
+            }
+            steps[2] = {
+                **steps[2],
+                "detail": "正在将实现依据整理为清晰的技术回答。",
+                "status": "running",
+            }
+            yield encode_event({
+                "type": "reasoning",
+                "summary": {"status": "thinking", "steps": steps},
+            })
+
+            steps[2] = {
+                **steps[2],
+                "detail": "已完成结论组织和关键实现依据校验。",
+                "status": "completed",
+            }
+            summary = {"status": "completed", "steps": steps}
+            result = await service.save_qa_exchange(
+                conv,
+                payload.instruction,
+                answer,
+                reasoning_summary=summary,
+            )
+            await db.commit()
+
+            yield encode_event({"type": "reasoning", "summary": summary})
+            yield encode_event({
+                "type": "answer",
+                "assistantMessage": result["assistantMessage"],
+            })
+            yield encode_event({"type": "done"})
+        except asyncio.CancelledError:
+            await db.rollback()
+            raise
+        except Exception as exc:  # noqa: BLE001
+            await db.rollback()
+            logger.exception(f"Q&A 流式回答失败 conv_id={conv_id}: {exc}")
+            yield encode_event({
+                "type": "error",
+                "message": "回答生成失败，请稍后重试",
+            })
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.delete("/conversations/{conv_id}", summary="删除会话")

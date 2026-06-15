@@ -96,6 +96,7 @@ class DocumentMessage(Base):
     role = Column(String(20), nullable=False)  # user | assistant
     content = Column(Text, nullable=False, default="")
     doc_version = Column(String(20), nullable=True)  # 该回复产出的文档版本
+    reasoning_summary = Column(JSON, nullable=True)  # 结构化思考摘要，不保存模型原始思维链
     created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
 
     conversation = relationship("DocumentConversation", back_populates="messages")

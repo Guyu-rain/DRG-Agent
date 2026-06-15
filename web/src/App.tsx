@@ -13,24 +13,27 @@ import { TaskCenter } from '@/pages/TaskCenter/TaskCenter';
 import { TestCase } from '@/pages/TestCase/TestCase';
 import { brandColor } from '@/utils/constants';
 
-const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <AppLayout />,
-    children: [
-      { index: true, element: <TaskCenter /> },
-      { path: 'drg', element: <DRGGrouping /> },
-      { path: 'rules', element: <RuleManagement /> },
-      { path: 'docs', element: <DocumentSystem /> },
-      { path: 'docs/all', element: <DocumentList /> },
-      { path: 'docs/type/:type', element: <DocumentList /> },
-      { path: 'docs/detail/:id', element: <DocumentDetail /> },
-      { path: 'tests', element: <TestCase /> },
-      { path: 'logs', element: <ExecutionLog /> },
-      { path: 'settings', element: <Settings /> },
-    ],
-  },
-]);
+const router = createBrowserRouter(
+  [
+    {
+      path: '/',
+      element: <AppLayout />,
+      children: [
+        { index: true, element: <TaskCenter /> },
+        { path: 'drg', element: <DRGGrouping /> },
+        { path: 'rules', element: <RuleManagement /> },
+        { path: 'docs', element: <DocumentSystem /> },
+        { path: 'docs/all', element: <DocumentList /> },
+        { path: 'docs/type/:type', element: <DocumentList /> },
+        { path: 'docs/detail/:id', element: <DocumentDetail /> },
+        { path: 'tests', element: <TestCase /> },
+        { path: 'logs', element: <ExecutionLog /> },
+        { path: 'settings', element: <Settings /> },
+      ],
+    },
+  ],
+  { future: { v7_relativeSplatPath: true } },
+);
 
 const sansStack =
   '"Geist", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, -apple-system, sans-serif';
@@ -161,7 +164,7 @@ export default function App() {
       }}
     >
       <AntApp>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </AntApp>
     </ConfigProvider>
   );

@@ -38,10 +38,23 @@ class QaSendRequest(CamelModel):
     instruction: str = Field(description="用户的技术问题")
 
 
+class ReasoningStep(CamelModel):
+    id: str
+    title: str
+    detail: str | None = None
+    status: str = Field(description="pending | running | completed | failed")
+
+
+class ReasoningSummary(CamelModel):
+    status: str = Field(description="thinking | completed | failed")
+    steps: list[ReasoningStep] = Field(default_factory=list)
+
+
 class QaMessage(CamelModel):
     message_id: str
     role: str
     content: str
+    reasoning_summary: ReasoningSummary | None = None
     created_at: str
 
 

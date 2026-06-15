@@ -12,7 +12,7 @@
 HTTP 请求
   │
   ▼
-API 路由层      app/api/v1/        43 个 REST 接口，统一 {code, data, message} 响应
+API 路由层      app/api/v1/        56 个 REST 接口，JSON 统一响应 + Q&A NDJSON 流
   │
   ▼
 服务层          app/services/      事务管理、输入校验、编排调用
@@ -32,7 +32,7 @@ API 路由层      app/api/v1/        43 个 REST 接口，统一 {code, data, m
   │
   ▼
 基础设施层      app/core/          配置、数据库、日志、中间件、异常
-                app/models/        SQLAlchemy ORM 模型（12 张表）
+                app/models/        SQLAlchemy ORM 模型（14 张表）
                 app/llm/           LLM 客户端封装 + Prompt 模板
                 app/tasks/         Celery 异步任务
 ```
@@ -40,8 +40,9 @@ API 路由层      app/api/v1/        43 个 REST 接口，统一 {code, data, m
 **关键设计原则**
 
 - **规则与 LLM 分离**：DRG 入组（MDC→ADRG→DRG）是 `app/engine/` 中的确定性算法，结果可复现、可审计；LLM 仅用于病历解析、解释润色、文档/测试用例生成等非关键路径。
-- **统一响应**：所有接口返回 `{ "code", "data", "message" }`，异常由全局处理器转换为同一结构。
+- **统一响应**：普通 JSON 接口返回 `{ "code", "data", "message" }`，异常由全局处理器转换为同一结构；Q&A 流式接口按行返回 NDJSON 事件。
 - **失败降级**：LLM 不可用时，解释生成与文档生成回退到模板化输出，核心入组不受影响。
+- **问答流兼容**：Q&A 使用 NDJSON 流式返回结构化思考摘要和最终回答；旧非流式接口保留为连接启动失败时的兼容路径。系统不保存或展示模型原始思维链。
 
 ### 目录结构
 
@@ -168,7 +169,7 @@ cd server
 ../.venv/bin/ruff check app/
 ```
 
-测试使用独立的临时 SQLite 数据库与 Mock LLM 客户端，**不依赖**真实 PostgreSQL 或 DeepSeek API。当前共 103 个用例，规则引擎覆盖率约 89%。
+测试使用独立的临时 SQLite 数据库与 Mock LLM 客户端，**不依赖**真实 PostgreSQL 或 DeepSeek API。当前共 118 个用例，规则引擎覆盖率约 89%。
 
 ---
 
@@ -187,4 +188,4 @@ cd server
 
 ## 7. 接口一览
 
-43 个 REST 接口，前缀 `/api/v1`，分组：`cases`(7) / `rules`(6) / `grouping`(4) / `documents`(11) / `testcases`(7) / `tasks`(3) / `system`(4) / `logs`(1)。完整定义见 [plans/03_api_interfaces.md](../plans/03_api_interfaces.md) 与运行时 Swagger 文档 `/docs`。
+56 个 REST 接口，前缀 `/api/v1`，分组：`cases`(7) / `rules`(7) / `grouping`(4) / `documents`(21) / `testcases`(8) / `tasks`(4) / `system`(4) / `logs`(1)。其中 Q&A 流式接口为 `POST /documents/qa/conversations/{conv_id}/messages/stream`，响应媒体类型为 `application/x-ndjson`。完整定义以运行时 Swagger 文档 `/docs` 为准；初始接口设计见 [plans/03_api_interfaces.md](../plans/03_api_interfaces.md)。

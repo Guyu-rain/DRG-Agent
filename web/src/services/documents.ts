@@ -1,4 +1,4 @@
-import { request } from './api';
+import { apiUrl, request } from './api';
 import type { ApiResponse, PaginationResponse } from '@/types/api';
 import type {
   ConversationDetail,
@@ -11,9 +11,49 @@ import type {
   DocumentSummary,
   DocumentTaskResponse,
   DocumentVersion,
+  QaStreamEvent,
   QaSendResponse,
   SendMessageResponse,
 } from '@/types/document';
+
+async function readNdjson(
+  response: Response,
+  onEvent: (event: QaStreamEvent) => void,
+) {
+  if (!response.ok) {
+    throw new Error(`流式问答请求失败 (${response.status})`);
+  }
+  if (!response.body) {
+    throw new Error('浏览器不支持流式响应');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    onEvent(JSON.parse(trimmed) as QaStreamEvent);
+  };
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      lines.forEach(consumeLine);
+      if (done) break;
+    }
+    consumeLine(buffer);
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 export const documentsApi = {
   generate: (data: DocumentGenerateRequest) =>
@@ -93,4 +133,21 @@ export const documentsApi = {
       url: `/documents/qa/conversations/${convId}/messages`,
       data: { instruction },
     }),
+  streamQaMessage: async (
+    convId: string,
+    instruction: string,
+    onEvent: (event: QaStreamEvent) => void,
+    signal?: AbortSignal,
+  ) => {
+    const response = await fetch(
+      apiUrl(`/documents/qa/conversations/${convId}/messages/stream`),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction }),
+        signal,
+      },
+    );
+    await readNdjson(response, onEvent);
+  },
 };

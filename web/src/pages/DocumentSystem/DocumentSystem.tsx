@@ -8,15 +8,18 @@ import {
   UnorderedListOutlined,
 } from '@ant-design/icons';
 import { Button, Dropdown, Empty, Input, Select, Space, Spin, Tag, Tabs, Tooltip, message } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MarkdownPreview } from '@/components/Common/MarkdownPreview';
+import { ReasoningSummaryPanel } from './components/ReasoningSummaryPanel';
 import { documentsApi } from '@/services';
 import type {
   DocType,
   DocumentConversationSummary,
   DocumentDetail,
   DocumentMessage,
+  QaStreamEvent,
+  ReasoningSummary,
 } from '@/types/document';
 import { triggerDownload } from '@/utils/download';
 import { docTypeLabels } from '@/utils/constants';
@@ -39,6 +42,18 @@ const qaQuickPrompts = [
 
 type ChatMode = 'doc_chat' | 'qa';
 
+const initialReasoningSummary: ReasoningSummary = {
+  status: 'thinking',
+  steps: [
+    {
+      id: 'starting',
+      title: '准备分析',
+      detail: '正在建立流式连接并准备分析问题。',
+      status: 'running',
+    },
+  ],
+};
+
 export function DocumentSystem() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<ChatMode>('doc_chat');
@@ -50,8 +65,9 @@ export function DocumentSystem() {
   const [docType, setDocType] = useState<DocType | undefined>('requirements');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const qaAbortRef = useRef<AbortController | null>(null);
 
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     if (mode === 'qa') {
       const response = await documentsApi.listQaConversations();
       setConversations(response.data.items);
@@ -59,17 +75,25 @@ export function DocumentSystem() {
       const response = await documentsApi.listConversations({ page: 1, pageSize: 50 });
       setConversations(response.data.items);
     }
-  };
+  }, [mode]);
 
   useEffect(() => {
     void loadConversations();
-  }, [mode]);
+  }, [loadConversations]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo?.({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
+  useEffect(() => () => qaAbortRef.current?.abort(), []);
+
+  const abortQaStream = () => {
+    qaAbortRef.current?.abort();
+    qaAbortRef.current = null;
+  };
+
   const selectConversation = async (convId: string) => {
+    abortQaStream();
     setActiveId(convId);
     if (mode === 'qa') {
       const response = await documentsApi.qaConversation(convId);
@@ -84,6 +108,7 @@ export function DocumentSystem() {
   };
 
   const startNew = () => {
+    abortQaStream();
     setActiveId(null);
     setMessages([]);
     setDoc(null);
@@ -106,7 +131,21 @@ export function DocumentSystem() {
       content: instruction,
       createdAt: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, optimistic]);
+    const assistantPlaceholder: DocumentMessage | null =
+      mode === 'qa'
+        ? {
+            messageId: `tmp-assistant-${Date.now()}`,
+            role: 'assistant',
+            content: '',
+            reasoningSummary: initialReasoningSummary,
+            createdAt: new Date().toISOString(),
+          }
+        : null;
+    setMessages((prev) => [
+      ...prev,
+      optimistic,
+      ...(assistantPlaceholder ? [assistantPlaceholder] : []),
+    ]);
     setInput('');
 
     try {
@@ -125,8 +164,83 @@ export function DocumentSystem() {
       }
 
       if (mode === 'qa') {
-        const response = await documentsApi.sendQaMessage(convId, instruction);
-        setMessages((prev) => [...prev, response.data.assistantMessage]);
+        const controller = new AbortController();
+        qaAbortRef.current = controller;
+        let streamStarted = false;
+        let answerReceived = false;
+
+        const updateAssistant = (updater: (message: DocumentMessage) => DocumentMessage) => {
+          if (!assistantPlaceholder) return;
+          setMessages((prev) =>
+            prev.map((item) =>
+              item.messageId === assistantPlaceholder.messageId ? updater(item) : item,
+            ),
+          );
+        };
+
+        try {
+          await documentsApi.streamQaMessage(
+            convId,
+            instruction,
+            (event: QaStreamEvent) => {
+              streamStarted = true;
+              if (event.type === 'reasoning') {
+                updateAssistant((item) => ({ ...item, reasoningSummary: event.summary }));
+              } else if (event.type === 'answer') {
+                answerReceived = true;
+                updateAssistant((item) => ({
+                  ...item,
+                  content: event.assistantMessage.content,
+                  createdAt: event.assistantMessage.createdAt,
+                  reasoningSummary:
+                    event.assistantMessage.reasoningSummary ?? item.reasoningSummary,
+                }));
+              } else if (event.type === 'error') {
+                throw new Error(event.message);
+              }
+            },
+            controller.signal,
+          );
+          if (!answerReceived) throw new Error('流式回答未返回最终内容');
+        } catch (streamError) {
+          if (controller.signal.aborted) throw streamError;
+          if (!streamStarted) {
+            const response = await documentsApi.sendQaMessage(convId, instruction);
+            updateAssistant((item) => ({
+              ...item,
+              content: response.data.assistantMessage.content,
+              createdAt: response.data.assistantMessage.createdAt,
+              reasoningSummary: {
+                status: 'completed',
+                steps: [
+                  {
+                    id: 'fallback',
+                    title: '兼容模式生成',
+                    detail: '实时思考过程不可用，已通过兼容接口完成回答。',
+                    status: 'completed',
+                  },
+                ],
+              },
+            }));
+          } else {
+            updateAssistant((item) => ({
+              ...item,
+              content: item.content || '回答生成中断，请稍后重试。',
+              reasoningSummary: {
+                status: 'failed',
+                steps:
+                  item.reasoningSummary?.steps.map((step) =>
+                    step.status === 'running'
+                      ? { ...step, status: 'failed' as const, detail: '该步骤执行中断。' }
+                      : step,
+                  ) ?? [],
+              },
+            }));
+            throw streamError;
+          }
+        } finally {
+          if (qaAbortRef.current === controller) qaAbortRef.current = null;
+        }
         setDoc(null);
       } else {
         const response = await documentsApi.sendMessage(convId, instruction);
@@ -134,9 +248,12 @@ export function DocumentSystem() {
         setDoc(response.data.document);
       }
       await loadConversations();
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       message.error(mode === 'qa' ? '问答失败，请稍后重试' : '生成失败，请稍后重试');
-      setMessages((prev) => prev.filter((item) => item.messageId !== optimistic.messageId));
+      if (mode !== 'qa') {
+        setMessages((prev) => prev.filter((item) => item.messageId !== optimistic.messageId));
+      }
       setInput(instruction);
     } finally {
       setSending(false);
@@ -170,7 +287,7 @@ export function DocumentSystem() {
   const sendingHint = isDocMode ? '正在生成文档…' : '正在查阅源码并生成回答…';
 
   return (
-    <div className="doc-chat">
+    <div className={`doc-chat doc-chat--${mode}`}>
       {/* 会话列表 */}
       <aside className="doc-chat__sidebar">
         <Tabs
@@ -255,11 +372,14 @@ export function DocumentSystem() {
           )}
           {messages.map((msg) => (
             <div key={msg.messageId} className={`doc-chat__bubble doc-chat__bubble--${msg.role}`}>
-              <MarkdownPreview content={msg.content} />
+              {msg.reasoningSummary && (
+                <ReasoningSummaryPanel summary={msg.reasoningSummary} />
+              )}
+              {msg.content && <MarkdownPreview content={msg.content} />}
               {msg.docVersion && <span className="doc-chat__ver">{msg.docVersion}</span>}
             </div>
           ))}
-          {sending && (
+          {sending && isDocMode && (
             <div className="doc-chat__bubble doc-chat__bubble--assistant">
               <Spin size="small" /> <span style={{ marginLeft: 8 }}>{sendingHint}</span>
             </div>

@@ -299,6 +299,10 @@
   margin: 0 auto;
 }
 
+.app-content--workspace {
+  max-width: none;
+}
+
 /* ===== Footer ===== */
 .app-footer {
   display: flex;

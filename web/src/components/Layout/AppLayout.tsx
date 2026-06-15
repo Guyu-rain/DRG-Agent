@@ -51,6 +51,7 @@ export function AppLayout() {
 
   const activeKey = selectedKey(location.pathname);
   const activeItem = routeItems.find((r) => r.key === activeKey) ?? routeItems[0];
+  const isDocumentWorkspace = location.pathname === '/docs';
 
   const menuItems = useMemo(
     () =>
@@ -156,7 +157,9 @@ export function AppLayout() {
           </div>
         </Header>
 
-        <Content className="app-content">
+        <Content
+          className={isDocumentWorkspace ? 'app-content app-content--workspace' : 'app-content'}
+        >
           <Outlet />
         </Content>
 

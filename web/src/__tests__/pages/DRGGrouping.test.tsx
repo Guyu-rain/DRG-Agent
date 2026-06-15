@@ -53,8 +53,13 @@ describe('DRGGrouping', () => {
     render(<DRGGrouping />);
     await screen.findByText(/DRG 2.0 演示规则/);
     await userEvent.click(screen.getByRole('button', { name: /开始入组/ }));
-    await waitFor(() => expect(screen.getByText('保存结果')).toBeInTheDocument(), { timeout: 3000 });
-    expect(screen.getByText('提交复核')).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(screen.getByRole('button', { name: /保存结果/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /提交复核/ })).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
     expect(screen.queryByText('生成文档')).not.toBeInTheDocument();
     expect(screen.queryByText('生成测试')).not.toBeInTheDocument();
   });
