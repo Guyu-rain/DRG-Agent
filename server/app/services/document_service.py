@@ -7,7 +7,7 @@ import asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ErrorCode, NotFoundException
+from app.core.exceptions import BadRequestException, ErrorCode, NotFoundException
 from app.core.logging import logger
 from app.models import (
     Document,
@@ -244,10 +244,10 @@ class DocumentService:
 
     # ----------------------------------------------------- 对话式文档生成
     async def create_conversation(
-        self, title: str | None = None, doc_type: str | None = None
+        self, title: str | None = None, doc_type: str | None = None, mode: str = "doc_chat"
     ) -> DocumentConversation:
         conv = DocumentConversation(
-            title=title or "新文档对话", doc_type=doc_type, status="active"
+            title=title or "新文档对话", doc_type=doc_type, mode=mode, status="active"
         )
         self.db.add(conv)
         await self.db.flush()
@@ -356,6 +356,61 @@ class DocumentService:
             "document": self.to_detail(doc),
         }
 
+    async def send_qa_message(self, conv_id: str, instruction: str) -> dict:
+        """在 Q&A 会话中追加一轮问答, 返回助手消息 (不创建/修改文档)。"""
+        conv, history_payload = await self.prepare_qa_message(conv_id)
+        answer = await self.generate_qa_answer(instruction, history_payload)
+        return await self.save_qa_exchange(conv, instruction, answer)
+
+    async def prepare_qa_message(
+        self, conv_id: str
+    ) -> tuple[DocumentConversation, list[dict]]:
+        """校验 Q&A 会话并构造不含当前问题的历史消息。"""
+        conv = await self.get_conversation(conv_id)
+        if conv.mode != "qa":
+            raise BadRequestException(
+                ErrorCode.REQUIRED_FIELD_MISSING,
+                f"会话不是 Q&A 模式: {conv_id}",
+            )
+        history = await self.get_messages(conv_id)
+        return conv, [{"role": m.role, "content": m.content} for m in history]
+
+    @staticmethod
+    async def generate_qa_answer(instruction: str, history_payload: list[dict]) -> str:
+        """在线程池中执行同步 LLM/工具调用，避免阻塞事件循环。"""
+        from app.agents import get_orchestrator
+
+        return await asyncio.to_thread(
+            get_orchestrator().execute_qa,
+            instruction, history_payload,
+        )
+
+    async def save_qa_exchange(
+        self,
+        conv: DocumentConversation,
+        instruction: str,
+        answer: str,
+        reasoning_summary: dict | None = None,
+    ) -> dict:
+        """原子保存一轮 Q&A 用户问题、助手回答与结构化思考摘要。"""
+        self.db.add(DocumentMessage(
+            conversation_id=conv.id, role="user", content=instruction,
+        ))
+        message = DocumentMessage(
+            conversation_id=conv.id,
+            role="assistant",
+            content=answer,
+            reasoning_summary=reasoning_summary,
+        )
+        self.db.add(message)
+        conv.updated_at = utcnow()
+        await self.db.flush()
+
+        return {
+            "conversationId": conv.id,
+            "assistantMessage": self.to_message(message),
+        }
+
     async def delete_conversation(self, conv_id: str) -> None:
         conv = await self.get_conversation(conv_id)
         await self.db.delete(conv)
@@ -369,6 +424,7 @@ class DocumentService:
             "title": conv.title,
             "docType": conv.doc_type,
             "documentId": conv.document_id,
+            "mode": conv.mode,
             "status": conv.status,
             "createdAt": conv.created_at,
             "updatedAt": conv.updated_at,
@@ -381,6 +437,7 @@ class DocumentService:
             "role": msg.role,
             "content": msg.content,
             "docVersion": msg.doc_version,
+            "reasoningSummary": msg.reasoning_summary,
             "createdAt": msg.created_at,
         }
 

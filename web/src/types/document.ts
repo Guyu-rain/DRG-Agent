@@ -61,11 +61,26 @@ export interface DocumentVersion {
 
 // ----------------------------------------------------- 对话式文档生成
 
+export type ReasoningStepStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export interface ReasoningStep {
+  id: string;
+  title: string;
+  detail?: string;
+  status: ReasoningStepStatus;
+}
+
+export interface ReasoningSummary {
+  status: 'thinking' | 'completed' | 'failed';
+  steps: ReasoningStep[];
+}
+
 export interface DocumentConversationSummary {
   conversationId: string;
   title: string;
   docType?: DocType | null;
   documentId?: string | null;
+  mode: 'doc_chat' | 'qa';
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -76,6 +91,7 @@ export interface DocumentMessage {
   role: 'user' | 'assistant';
   content: string;
   docVersion?: string | null;
+  reasoningSummary?: ReasoningSummary | null;
   createdAt: string;
 }
 
@@ -101,3 +117,15 @@ export interface DocumentSubmitResponse {
     checksum: string;
   };
 }
+
+// ----------------------------------------------------- Q&A 模式
+export interface QaSendResponse {
+  conversationId: string;
+  assistantMessage: DocumentMessage;
+}
+
+export type QaStreamEvent =
+  | { type: 'reasoning'; summary: ReasoningSummary }
+  | { type: 'answer'; assistantMessage: DocumentMessage }
+  | { type: 'done' }
+  | { type: 'error'; message: string };

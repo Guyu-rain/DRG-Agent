@@ -30,15 +30,17 @@ const parsePaging = (request: Request) => {
 };
 
 // 对话式文档生成的内存态会话列表 (Mock)
-const mockConversations: Array<{
+interface MockConversation {
   conversationId: string;
   title: string;
   docType: string | null;
   documentId: string | null;
+  mode: 'doc_chat' | 'qa';
   status: string;
   createdAt: string;
   updatedAt: string;
-}> = [];
+}
+const mockConversations: MockConversation[] = [];
 
 export const handlers = [
   http.get(`${api}/system/health`, async () => {
@@ -230,11 +232,12 @@ export const handlers = [
   }),
   http.post(`${api}/documents/conversations`, async ({ request }) => {
     const body = (await request.json()) as { title?: string; docType?: string | null };
-    const conv = {
+    const conv: MockConversation = {
       conversationId: `CONV-MOCK-${mockConversations.length + 1}`,
       title: body.title ?? '新文档对话',
       docType: body.docType ?? null,
       documentId: null,
+      mode: 'doc_chat',
       status: 'active',
       createdAt: '2026-05-21T07:30:00Z',
       updatedAt: '2026-05-21T07:30:00Z',
@@ -249,6 +252,7 @@ export const handlers = [
       title: base.title,
       docType: base.type,
       documentId: base.docId,
+      mode: 'doc_chat',
       status: 'active',
       createdAt: '2026-05-21T07:30:00Z',
       updatedAt: '2026-05-21T07:30:00Z',
@@ -278,6 +282,133 @@ export const handlers = [
     if (index >= 0) mockConversations.splice(index, 1);
     return ok({ conversationId: convId });
   }),
+
+  // Q&A 模式 (须在 /documents/:docId 之前注册)
+  http.get(`${api}/documents/qa/conversations`, () => {
+    const qa = mockConversations.filter((c) => c.mode === 'qa');
+    return ok(paged(qa, 1, 50));
+  }),
+  http.post(`${api}/documents/qa/conversations`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as { title?: string };
+    const conv: MockConversation = {
+      conversationId: `QACONV-MOCK-${mockConversations.length + 1}`,
+      title: body.title ?? '新问答',
+      docType: null,
+      documentId: null,
+      mode: 'qa',
+      status: 'active',
+      createdAt: '2026-05-21T07:30:00Z',
+      updatedAt: '2026-05-21T07:30:00Z',
+    };
+    mockConversations.unshift(conv);
+    return ok(conv, 'success', 201);
+  }),
+  http.get(`${api}/documents/qa/conversations/:convId`, ({ params }) => {
+    const conv = mockConversations.find((c) => c.conversationId === String(params.convId));
+    return ok({
+      conversationId: String(params.convId),
+      title: conv?.title ?? '问答',
+      docType: null,
+      documentId: null,
+      mode: 'qa',
+      status: 'active',
+      createdAt: '2026-05-21T07:30:00Z',
+      updatedAt: '2026-05-21T07:30:00Z',
+      messages: [],
+    });
+  }),
+  http.post(`${api}/documents/qa/conversations/:convId/messages`, async ({ request, params }) => {
+    await delay(120);
+    const body = (await request.json()) as { instruction: string };
+    return ok({
+      conversationId: String(params.convId),
+      assistantMessage: {
+        messageId: `QAMSG-MOCK-${Date.now()}`,
+        role: 'assistant',
+        content: `关于「${body.instruction}」，结论如下：\n\n- **MDC 匹配**在 \`mdc_matcher.py\` 实现\n- 详见下表\n\n| 模块 | 文件 |\n| --- | --- |\n| 入组 | grouping_engine.py |`,
+        docVersion: null,
+        createdAt: '2026-05-21T07:31:00Z',
+      },
+    });
+  }),
+  http.post(`${api}/documents/qa/conversations/:convId/messages/stream`, async ({ request }) => {
+    const body = (await request.json()) as { instruction: string };
+    const encoder = new TextEncoder();
+    const summary = {
+      status: 'completed',
+      steps: [
+        {
+          id: 'understand',
+          title: '理解问题',
+          detail: '识别问题范围、关键术语和需要核对的实现点。',
+          status: 'completed',
+        },
+        {
+          id: 'inspect',
+          title: '查阅项目实现',
+          detail: '已完成相关源码、接口和配置的检索与核对。',
+          status: 'completed',
+        },
+        {
+          id: 'compose',
+          title: '组织回答',
+          detail: '已完成结论组织和关键实现依据校验。',
+          status: 'completed',
+        },
+      ],
+    };
+    const stream = new ReadableStream({
+      async start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `${JSON.stringify({
+              type: 'reasoning',
+              summary: {
+                status: 'thinking',
+                steps: [
+                  {
+                    id: 'understand',
+                    title: '理解问题',
+                    detail: '识别问题范围、关键术语和需要核对的实现点。',
+                    status: 'completed',
+                  },
+                  {
+                    id: 'inspect',
+                    title: '查阅项目实现',
+                    detail: '正在检索相关源码、接口和配置。',
+                    status: 'running',
+                  },
+                ],
+              },
+            })}\n`,
+          ),
+        );
+        await delay(80);
+        controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'reasoning', summary })}\n`));
+        controller.enqueue(
+          encoder.encode(
+            `${JSON.stringify({
+              type: 'answer',
+              assistantMessage: {
+                messageId: `QAMSG-MOCK-${Date.now()}`,
+                role: 'assistant',
+                content: `关于「${body.instruction}」，结论如下：\n\n- **MDC 匹配**在 \`mdc_matcher.py\` 实现\n- 详见下表\n\n| 模块 | 文件 |\n| --- | --- |\n| 入组 | grouping_engine.py |`,
+                docVersion: null,
+                reasoningSummary: summary,
+                createdAt: '2026-05-21T07:31:00Z',
+              },
+            })}\n`,
+          ),
+        );
+        controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'done' })}\n`));
+        controller.close();
+      },
+    });
+    return new HttpResponse(stream, {
+      headers: { 'Content-Type': 'application/x-ndjson' },
+    });
+  }),
+
   http.get(`${api}/documents`, ({ request }) => {
     const url = new URL(request.url);
     const type = url.searchParams.get('type');

@@ -1,5 +1,7 @@
 """文档系统 API 测试。"""
 
+import json
+
 
 async def _generate_doc(client) -> str:
     resp = await client.post("/api/v1/documents/generate", json={
@@ -114,3 +116,51 @@ async def test_conversation_list_and_delete(client):
     assert deleted.status_code == 200
     missing = await client.get(f"/api/v1/documents/conversations/{conv_id}")
     assert missing.status_code == 404
+
+
+async def test_qa_stream_returns_reasoning_and_persists_summary(client):
+    create = await client.post(
+        "/api/v1/documents/qa/conversations",
+        json={"title": "流式问答测试"},
+    )
+    assert create.status_code == 201
+    conv_id = create.json()["data"]["conversationId"]
+
+    response = await client.post(
+        f"/api/v1/documents/qa/conversations/{conv_id}/messages/stream",
+        json={"instruction": "MDC 匹配如何实现？"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+
+    events = [json.loads(line) for line in response.text.splitlines() if line]
+    assert [event["type"] for event in events] == [
+        "reasoning",
+        "reasoning",
+        "reasoning",
+        "answer",
+        "done",
+    ]
+    assert events[0]["summary"]["status"] == "thinking"
+    assert events[-2]["assistantMessage"]["reasoningSummary"]["status"] == "completed"
+    assert len(events[-2]["assistantMessage"]["reasoningSummary"]["steps"]) == 3
+
+    detail = await client.get(f"/api/v1/documents/qa/conversations/{conv_id}")
+    assert detail.status_code == 200
+    messages = detail.json()["data"]["messages"]
+    assert len(messages) == 2
+    assert messages[1]["reasoningSummary"]["status"] == "completed"
+
+
+async def test_qa_stream_rejects_document_conversation(client):
+    create = await client.post(
+        "/api/v1/documents/conversations",
+        json={"title": "普通文档会话"},
+    )
+    conv_id = create.json()["data"]["conversationId"]
+
+    response = await client.post(
+        f"/api/v1/documents/qa/conversations/{conv_id}/messages/stream",
+        json={"instruction": "这不应该进入问答流"},
+    )
+    assert response.status_code == 400

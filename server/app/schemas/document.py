@@ -34,6 +34,35 @@ class MessageSendRequest(CamelModel):
     instruction: str = Field(description="本轮对用户文档的指令 (新建/扩写/修订等)")
 
 
+class QaSendRequest(CamelModel):
+    instruction: str = Field(description="用户的技术问题")
+
+
+class ReasoningStep(CamelModel):
+    id: str
+    title: str
+    detail: str | None = None
+    status: str = Field(description="pending | running | completed | failed")
+
+
+class ReasoningSummary(CamelModel):
+    status: str = Field(description="thinking | completed | failed")
+    steps: list[ReasoningStep] = Field(default_factory=list)
+
+
+class QaMessage(CamelModel):
+    message_id: str
+    role: str
+    content: str
+    reasoning_summary: ReasoningSummary | None = None
+    created_at: str
+
+
+class QaSendResponse(CamelModel):
+    assistant_message: QaMessage
+    conversation_id: str | None = None
+
+
 class DocumentSection(CamelModel):
     id: str
     title: str

@@ -69,6 +69,7 @@ class DocumentConversation(Base):
     id = Column(String(40), primary_key=True, default=partial(generate_id, "CONV"))
     title = Column(String(255), nullable=False, default="新文档对话")
     doc_type = Column(String(30), nullable=True)  # 可选标签, 由用户选择或对话推断
+    mode = Column(String(20), nullable=False, default="doc_chat", index=True)  # doc_chat | qa
     document_id = Column(String(40), ForeignKey("documents.id"), nullable=True, index=True)
     status = Column(String(20), nullable=False, default="active", index=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
@@ -95,6 +96,7 @@ class DocumentMessage(Base):
     role = Column(String(20), nullable=False)  # user | assistant
     content = Column(Text, nullable=False, default="")
     doc_version = Column(String(20), nullable=True)  # 该回复产出的文档版本
+    reasoning_summary = Column(JSON, nullable=True)  # 结构化思考摘要，不保存模型原始思维链
     created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
 
     conversation = relationship("DocumentConversation", back_populates="messages")
