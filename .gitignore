@@ -65,6 +65,11 @@ file/
 # Example cases (generated from scripts, not source)
 example/
 
+# uv cache
+.uv-cache/
+
 # claude
 .claude/server/data/rules/import_*.json
+
+# Extraction scripts (utility tooling)
 scripts/
