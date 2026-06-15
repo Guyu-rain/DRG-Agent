@@ -31,6 +31,14 @@ def _eager_background_tasks(monkeypatch):
     monkeypatch.setattr(settings, "TASKS_EAGER", True)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_document_storage(monkeypatch, tmp_path):
+    """将文档/导出存储指向临时目录, 避免测试产物污染仓库 documents/。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "DOCUMENT_STORAGE_PATH", str(tmp_path / "documents"))
+
+
 # --- Mock LLM (整个测试会话生效) --------------------------------------------
 
 
