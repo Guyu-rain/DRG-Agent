@@ -50,8 +50,12 @@ export function Settings() {
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="超时秒数" name={['llm', 'timeoutSeconds']}>
-                    <InputNumber min={5} max={300} style={{ width: '100%' }} />
+                  <Form.Item
+                    label="请求超时"
+                    name={['llm', 'timeoutSeconds']}
+                    extra="当前版本不设置固定超时，文档生成会等待模型完成。"
+                  >
+                    <InputNumber disabled placeholder="无限制" style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>

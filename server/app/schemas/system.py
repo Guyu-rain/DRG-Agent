@@ -9,7 +9,7 @@ class LLMConfigSchema(CamelModel):
     api_base: str | None = None
     model: str | None = None
     max_retries: int = 3
-    timeout_seconds: int = 60
+    timeout_seconds: int | None = None
 
 
 class StorageConfigSchema(CamelModel):

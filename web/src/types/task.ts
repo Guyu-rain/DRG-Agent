@@ -38,7 +38,7 @@ export interface SystemConfig {
     apiBase: string;
     model: string;
     maxRetries: number;
-    timeoutSeconds: number;
+    timeoutSeconds: number | null;
   };
   storage: {
     documentPath: string;

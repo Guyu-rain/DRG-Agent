@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_API_BASE: str = "https://api.deepseek.com"
     LLM_MODEL: str = "deepseek-chat"
-    LLM_TIMEOUT: int = 60
+    # None 表示不限制单次 LLM 请求时长。长任务由用户主动取消，而非固定超时中断。
+    LLM_TIMEOUT: float | None = None
     LLM_MAX_RETRIES: int = 3
 
     # Database

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import subprocess  # noqa: S404 - ripgrep 为开发工具, 无外部输入风险
+from inspect import Parameter, signature
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,11 @@ SOURCE_TOOLS: list[dict] = [
                         "type": "integer",
                         "description": f"最大返回行数, 默认 {_MAX_FILE_LINES}",
                         "default": _MAX_FILE_LINES,
+                    },
+                    "start_line": {
+                        "type": "integer",
+                        "description": "从第几行开始读取，默认为第 1 行",
+                        "default": 1,
                     },
                 },
                 "required": ["path"],
@@ -115,7 +121,11 @@ def _safe_subdir(rel_dir: str) -> Path:
 
 
 # ------------------------------------------------------------------ 工具执行
-def execute_read_source_file(path: str, max_lines: int = _MAX_FILE_LINES) -> str:
+def execute_read_source_file(
+    path: str,
+    max_lines: int = _MAX_FILE_LINES,
+    start_line: int = 1,
+) -> str:
     """读取源文件并返回内容。"""
     target = _safe_path(path)
     if not target.exists():
@@ -127,9 +137,10 @@ def execute_read_source_file(path: str, max_lines: int = _MAX_FILE_LINES) -> str
     except UnicodeDecodeError:
         return f"[错误] 无法以 UTF-8 解码: {path}"
     total = len(lines)
-    if total <= max_lines:
-        return _format_file_output(path, lines, total, total)
-    return _format_file_output(path, lines[:max_lines], total, max_lines)
+    safe_start = max(int(start_line), 1)
+    safe_limit = max(int(max_lines), 1)
+    selected = lines[safe_start - 1 : safe_start - 1 + safe_limit]
+    return _format_file_output(path, selected, total, len(selected), safe_start)
 
 
 def execute_list_source_files(directory: str = "server/app") -> str:
@@ -228,8 +239,18 @@ def execute_tool_call(tool_name: str, arguments: dict) -> str:
     if executor is None:
         return f"[错误] 未知工具: {tool_name}"
     try:
-        result = executor(**arguments)
-        logger.info(f"工具调用 {tool_name}({arguments}) -> {len(result)} 字符")
+        parameters = signature(executor).parameters
+        accepts_kwargs = any(p.kind == Parameter.VAR_KEYWORD for p in parameters.values())
+        safe_arguments = (
+            arguments
+            if accepts_kwargs
+            else {key: value for key, value in arguments.items() if key in parameters}
+        )
+        ignored = sorted(set(arguments) - set(safe_arguments))
+        if ignored:
+            logger.warning(f"工具 {tool_name} 忽略未知参数: {ignored}")
+        result = executor(**safe_arguments)
+        logger.info(f"工具调用 {tool_name}({safe_arguments}) -> {len(result)} 字符")
         return result
     except (PermissionError, ValueError) as exc:
         return f"[安全限制] {exc}"
@@ -238,13 +259,26 @@ def execute_tool_call(tool_name: str, arguments: dict) -> str:
         return f"[工具异常] {exc}"
 
 
-def format_file_output(path: str, lines: list[str], total: int, shown: int) -> str:
+def format_file_output(
+    path: str,
+    lines: list[str],
+    total: int,
+    shown: int,
+    start_line: int = 1,
+) -> str:
     """格式化文件输出。"""
-    body = "\n".join(f"{i + 1:>4}|{line}" for i, line in enumerate(lines))
-    if shown < total:
-        body += f"\n  ... (共 {total} 行, 仅显示前 {shown} 行)"
+    body = "\n".join(f"{i:>4}|{line}" for i, line in enumerate(lines, start_line))
+    if start_line > 1 or start_line - 1 + shown < total:
+        end_line = start_line + max(shown - 1, 0)
+        body += f"\n  ... (共 {total} 行, 显示第 {start_line}-{end_line} 行)"
     return f"文件 {path} (共 {total} 行):\n```\n{body}\n```"
 
 
-def _format_file_output(path: str, lines: list[str], total: int, shown: int) -> str:
-    return format_file_output(path, lines, total, shown)
+def _format_file_output(
+    path: str,
+    lines: list[str],
+    total: int,
+    shown: int,
+    start_line: int = 1,
+) -> str:
+    return format_file_output(path, lines, total, shown, start_line)

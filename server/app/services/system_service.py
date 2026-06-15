@@ -43,7 +43,7 @@ class SystemService:
                     "api_base": settings.LLM_API_BASE,
                     "model": settings.LLM_MODEL,
                     "max_retries": settings.LLM_MAX_RETRIES,
-                    "timeout": settings.LLM_TIMEOUT,
+                    "timeout": None,
                 },
                 storage_config={
                     "document_path": settings.DOCUMENT_STORAGE_PATH,
@@ -64,7 +64,7 @@ class SystemService:
                 "apiBase": llm.get("api_base"),
                 "model": llm.get("model"),
                 "maxRetries": llm.get("max_retries", 3),
-                "timeoutSeconds": llm.get("timeout", 60),
+                "timeoutSeconds": None,
             },
             "storage": {
                 "documentPath": storage.get("document_path"),
@@ -84,8 +84,7 @@ class SystemService:
                 current["model"] = llm["model"]
             if llm.get("maxRetries") is not None:
                 current["max_retries"] = llm["maxRetries"]
-            if llm.get("timeoutSeconds") is not None:
-                current["timeout"] = llm["timeoutSeconds"]
+            current["timeout"] = None
             config.llm_config = current
         storage = payload.get("storage")
         if storage:

@@ -5,7 +5,9 @@ from app.llm.client import (
     LLMClientProtocol,
     MockLLMClient,
     get_llm_client,
+    is_tool_protocol_content,
     parse_llm_json_output,
+    parse_text_tool_calls,
 )
 from app.llm.prompts import load_prompt, render_prompt
 from app.llm.tools import SOURCE_TOOLS
@@ -15,7 +17,9 @@ __all__ = [
     "LLMClientProtocol",
     "MockLLMClient",
     "get_llm_client",
+    "is_tool_protocol_content",
     "parse_llm_json_output",
+    "parse_text_tool_calls",
     "load_prompt",
     "render_prompt",
     "SOURCE_TOOLS",

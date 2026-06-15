@@ -27,7 +27,7 @@ async def test_demo_init_idempotent(client):
 async def test_get_config(client):
     resp = await client.get("/api/v1/system/config")
     assert resp.status_code == 200
-    assert "llm" in resp.json()["data"]
+    assert resp.json()["data"]["llm"]["timeoutSeconds"] is None
 
 
 async def test_update_config(client):

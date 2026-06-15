@@ -118,6 +118,35 @@ async def test_conversation_list_and_delete(client):
     assert missing.status_code == 404
 
 
+async def test_conversation_rejects_tool_protocol_without_persisting(client, monkeypatch):
+    class InvalidOrchestrator:
+        def execute_document_chat(self, *_args, **_kwargs):
+            return (
+                "<｜｜DSML｜｜tool_calls>"
+                '<｜｜DSML｜｜invoke name="read_source_file"></｜｜DSML｜｜invoke>'
+                "</｜｜DSML｜｜tool_calls>"
+            )
+
+    monkeypatch.setattr("app.agents.get_orchestrator", lambda: InvalidOrchestrator())
+    create = await client.post(
+        "/api/v1/documents/conversations",
+        json={"title": "协议泄漏测试", "docType": "testing"},
+    )
+    conv_id = create.json()["data"]["conversationId"]
+
+    response = await client.post(
+        f"/api/v1/documents/conversations/{conv_id}/messages",
+        json={"instruction": "生成测试文档"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["code"] == 50003
+    detail = await client.get(f"/api/v1/documents/conversations/{conv_id}")
+    assert detail.status_code == 200
+    assert detail.json()["data"]["messages"] == []
+    assert detail.json()["data"]["document"] is None
+
+
 async def test_qa_stream_returns_reasoning_and_persists_summary(client):
     create = await client.post(
         "/api/v1/documents/qa/conversations",

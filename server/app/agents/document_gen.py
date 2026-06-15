@@ -11,7 +11,11 @@ import json
 
 from app.agents.state import DocumentGenState
 from app.core.logging import logger
-from app.llm import SOURCE_TOOLS, render_prompt
+from app.llm import SOURCE_TOOLS, is_tool_protocol_content, render_prompt
+
+
+class InvalidDocumentContentError(RuntimeError):
+    """模型返回的内容不是可保存的最终文档。"""
 
 # doc_type -> prompt 模板名
 _TEMPLATE_MAP = {
@@ -72,7 +76,12 @@ def generate_document_chat(
             temperature=0.3,
             max_tokens=6000,
         )
-        return content.strip() or fallback
+        content = content.strip()
+        if is_tool_protocol_content(content):
+            raise InvalidDocumentContentError("模型返回了未完成的工具调用协议")
+        return content or fallback
+    except InvalidDocumentContentError:
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.error(f"对话式文档生成失败, 使用降级输出: {exc}")
         return fallback

@@ -63,7 +63,7 @@ export const handlers = [
         apiBase: 'https://api.deepseek.com',
         model: 'deepseek-chat',
         maxRetries: 3,
-        timeoutSeconds: 60,
+        timeoutSeconds: null,
       },
       storage: {
         documentPath: './server/documents',

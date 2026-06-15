@@ -3,7 +3,9 @@
 import asyncio
 import time
 
-from app.models import Document
+import pytest
+from app.core.exceptions import AppException, ErrorCode
+from app.models import Document, DocumentConversation, DocumentMessage, DocumentVersion
 from app.services.document_service import DocumentService
 from app.services.task_service import TaskService
 from sqlalchemy import func, select
@@ -71,3 +73,41 @@ async def test_cancel_running_generation_discards_result(db_session, db_engine, 
     assert task.status == "cancelled"
     assert task.result_doc_id is None
     assert (await db_session.execute(select(func.count()).select_from(Document))).scalar_one() == 0
+
+
+async def test_invalid_chat_output_preserves_document_and_history(db_session, monkeypatch):
+    class InvalidOrchestrator:
+        def execute_document_chat(self, *_args, **_kwargs):
+            return (
+                "<｜｜DSML｜｜tool_calls>"
+                '<｜｜DSML｜｜invoke name="read_source_file"></｜｜DSML｜｜invoke>'
+                "</｜｜DSML｜｜tool_calls>"
+            )
+
+    doc = Document(
+        doc_type="testing",
+        title="稳定版本",
+        content="# 稳定版本\n\n原始内容",
+        original_content="# 稳定版本\n\n原始内容",
+    )
+    db_session.add(doc)
+    await db_session.flush()
+    conv = DocumentConversation(title="测试会话", doc_type="testing", document_id=doc.id)
+    db_session.add(conv)
+    await db_session.flush()
+    monkeypatch.setattr("app.agents.get_orchestrator", lambda: InvalidOrchestrator())
+
+    with pytest.raises(AppException) as exc_info:
+        await DocumentService(db_session).send_message(conv.id, "继续扩写")
+
+    assert exc_info.value.code == ErrorCode.DOCUMENT_GEN_FAILED
+    assert exc_info.value.http_status == 502
+    await db_session.refresh(doc)
+    assert doc.content == "# 稳定版本\n\n原始内容"
+    assert doc.version == "V1.0"
+    assert (
+        await db_session.execute(select(func.count()).select_from(DocumentVersion))
+    ).scalar_one() == 0
+    assert (
+        await db_session.execute(select(func.count()).select_from(DocumentMessage))
+    ).scalar_one() == 0

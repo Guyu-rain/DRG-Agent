@@ -169,7 +169,7 @@ cd server
 ../.venv/bin/ruff check app/
 ```
 
-测试使用独立的临时 SQLite 数据库与 Mock LLM 客户端，**不依赖**真实 PostgreSQL 或 DeepSeek API。当前共 118 个用例，规则引擎覆盖率约 89%。
+测试使用独立的临时 SQLite 数据库与 Mock LLM 客户端，**不依赖**真实 PostgreSQL 或 DeepSeek API。当前共 126 个用例，规则引擎覆盖率约 89%。
 
 ---
 
@@ -179,7 +179,9 @@ cd server
 - **数据库未启动**：若 PostgreSQL 容器未运行，应用仍可启动，但 `/system/health` 会返回 `database: disconnected`。先执行 `docker compose up -d`。
 - **迁移**：模型变更后需 `alembic revision --autogenerate -m "..."` 再 `alembic upgrade head`。应用启动时也会 `create_all` 作为兜底，但正式变更应走迁移。
 - **LLM 不可达**：解释生成、文档生成会自动降级为模板化输出；DRG 入组为确定性规则匹配，不受影响。
-- **文档/测试用例生成较慢**：因含真实 LLM 调用，单次可能 15–40 秒；前端 Axios 超时已设为 60 秒。
+- **文档/测试用例生成较慢**：真实 LLM 可能执行多轮源码工具调用。当前版本不限制工具调用轮次，也不设置固定请求超时；模型完成后才返回结果。
+- **文档输出保护**：DeepSeek 偶尔返回的 DSML/工具协议会继续作为工具调用处理，无法解析的协议文本不会覆盖当前文档。
+- **重复启动保护**：`start.sh` 会复用本项目已有进程；若 8000/5173 被其他程序占用则直接停止，不会启动重复 worker 或漂移到其他端口。
 - **入组结果可复现**：`app/engine/` 为纯算法，相同输入必得相同 DRG；修改规则请改 `data/rules/demo_rules.json` 或重新导入规则版本。
 - **端口占用**：后端默认 8000。若被占用，可改 `uvicorn ... --port <其它端口>`，并相应调整前端 Vite 代理 `web/vite.config.ts`。
 - **CORS**：已允许 `http://localhost:5173`；前端开发走 Vite 代理时为同源，不触发 CORS。

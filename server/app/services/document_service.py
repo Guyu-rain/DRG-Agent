@@ -7,8 +7,9 @@ import asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestException, ErrorCode, NotFoundException
+from app.core.exceptions import AppException, BadRequestException, ErrorCode, NotFoundException
 from app.core.logging import logger
+from app.llm import is_tool_protocol_content
 from app.models import (
     Document,
     DocumentConversation,
@@ -290,22 +291,39 @@ class DocumentService:
     async def send_message(self, conv_id: str, instruction: str) -> dict:
         """在会话中追加一轮指令, 生成/修订当前文档, 返回助手消息与最新文档。"""
         from app.agents import get_orchestrator
+        from app.agents.document_gen import InvalidDocumentContentError
 
         conv = await self.get_conversation(conv_id)
         history = await self.get_messages(conv_id)
-
-        self.db.add(DocumentMessage(
-            conversation_id=conv_id, role="user", content=instruction,
-        ))
 
         doc = await self.db.get(Document, conv.document_id) if conv.document_id else None
         current_content = doc.content if doc else ""
         history_payload = [{"role": m.role, "content": m.content} for m in history]
 
-        new_content = await asyncio.to_thread(
-            get_orchestrator().execute_document_chat,
-            instruction, current_content, history_payload, conv.doc_type,
-        )
+        try:
+            new_content = await asyncio.to_thread(
+                get_orchestrator().execute_document_chat,
+                instruction, current_content, history_payload, conv.doc_type,
+            )
+        except InvalidDocumentContentError as exc:
+            logger.error(f"文档对话返回无效内容，保留当前版本 {conv_id}: {exc}")
+            raise AppException(
+                code=ErrorCode.DOCUMENT_GEN_FAILED,
+                message="模型未返回有效文档，当前版本已保留，请重试",
+                http_status=502,
+            ) from exc
+
+        if not new_content.strip() or is_tool_protocol_content(new_content):
+            logger.error(f"文档对话生成结果校验失败，保留当前版本: {conv_id}")
+            raise AppException(
+                code=ErrorCode.DOCUMENT_GEN_FAILED,
+                message="模型未返回有效文档，当前版本已保留，请重试",
+                http_status=502,
+            )
+
+        self.db.add(DocumentMessage(
+            conversation_id=conv_id, role="user", content=instruction,
+        ))
 
         if doc is None:
             default_title = conv.title if conv.title != "新文档对话" else instruction[:40]

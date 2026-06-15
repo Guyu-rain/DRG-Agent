@@ -9,12 +9,21 @@ from __future__ import annotations
 import json
 import re
 import time
+from html import unescape
 from typing import Protocol
 
 from app.core.config import settings
 from app.core.logging import logger
 
-_MAX_TOOL_ROUNDS = 5
+_DSML_INVOKE_RE = re.compile(
+    r'<\|\|DSML\|\|invoke\s+name="([^"]+)">(.*?)</\|\|DSML\|\|invoke>',
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_PARAMETER_RE = re.compile(
+    r'<\|\|DSML\|\|parameter\s+name="([^"]+)"(?:\s+string="(true|false)")?'
+    r">(.*?)</\|\|DSML\|\|parameter>",
+    re.DOTALL | re.IGNORECASE,
+)
 
 
 class LLMClientProtocol(Protocol):
@@ -29,7 +38,7 @@ class LLMClient:
     """基于 OpenAI Python SDK 的 LLM 客户端 (兼容 DeepSeek)。
 
     支持 Function Calling: 传入 ``tools`` 参数后自动进入 tool call 循环,
-    执行工具并将结果回传 LLM, 最多 {_MAX_TOOL_ROUNDS} 轮。
+    持续执行工具并将结果回传 LLM，直到模型返回最终文本。
     """
 
     def __init__(self) -> None:
@@ -91,7 +100,7 @@ class LLMClient:
             prompt: 单轮提示词 (当 ``messages`` 未提供时使用)。
             messages: 多轮对话消息列表，提供时优先于 ``prompt``。
             tools: OpenAI Function Calling 工具定义列表。传入后启用
-                tool call 循环 (最多 {_MAX_TOOL_ROUNDS} 轮)。
+                tool call 循环，直到模型返回最终文本。
             tool_choice: 工具选择策略, 默认 "auto"。
 
         Raises:
@@ -152,7 +161,9 @@ class LLMClient:
 
         last_error: Exception | None = None
 
-        for _round in range(_MAX_TOOL_ROUNDS):
+        tool_round = 0
+        while True:
+            tool_round += 1
             for attempt in range(max_retries):
                 try:
                     response = self._chat_completion(
@@ -171,53 +182,90 @@ class LLMClient:
 
             message = response.choices[0].message
             usage = getattr(response, "usage", None)
-            logger.info(f"Tool round {_round + 1} model={model} tokens={usage}")
+            logger.info(f"Tool round {tool_round} model={model} tokens={usage}")
 
             if message.tool_calls:
-                finish = response.choices[0].finish_reason
-                # 如果 finish_reason 是 stop 且有 content, 不再 tool call
-                if finish == "stop" and message.content:
-                    return message.content
+                structured_calls = [
+                    (tc.id, tc.function.name, tc.function.arguments)
+                    for tc in message.tool_calls
+                ]
+                self._append_and_execute_tool_calls(
+                    messages,
+                    message.content,
+                    structured_calls,
+                    execute_tool_call,
+                )
+                continue
 
+            content = message.content or ""
+            textual_calls = parse_text_tool_calls(content)
+            if textual_calls:
+                calls = [
+                    (
+                        f"text_tool_call_{tool_round}_{index}",
+                        name,
+                        json.dumps(arguments, ensure_ascii=False),
+                    )
+                    for index, (name, arguments) in enumerate(textual_calls, 1)
+                ]
+                logger.warning(
+                    f"模型以文本协议返回 {len(calls)} 个工具调用，已转换为结构化调用"
+                )
+                self._append_and_execute_tool_calls(
+                    messages,
+                    None,
+                    calls,
+                    execute_tool_call,
+                )
+                continue
+
+            if is_tool_protocol_content(content):
+                logger.warning("模型返回了无法解析的工具协议文本，要求模型重新发起结构化调用")
+                messages.append({"role": "assistant", "content": content})
                 messages.append({
-                    "role": "assistant",
-                    "content": message.content,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in message.tool_calls
-                    ],
+                    "role": "user",
+                    "content": (
+                        "上一条响应是未完成的工具调用协议，不能作为最终回答。"
+                        "请使用已提供的结构化工具调用，或直接给出最终正文。"
+                    ),
                 })
-                for tc in message.tool_calls:
-                    try:
-                        args = json.loads(tc.function.arguments)
-                    except json.JSONDecodeError:
-                        args = {}
-                    result = execute_tool_call(tc.function.name, args)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": result,
-                    })
-            else:
-                return message.content or ""
+                continue
 
-        # 超过最大轮数: 最后让 LLM 总结
+            return content
+
+    @staticmethod
+    def _append_and_execute_tool_calls(
+        messages: list[dict],
+        assistant_content: str | None,
+        calls: list[tuple[str, str, str]],
+        execute_tool_call,  # noqa: ANN001
+    ) -> None:
+        """追加一轮结构化工具调用并执行，兼容 SDK 调用和 DSML 文本调用。"""
         messages.append({
-            "role": "user",
-            "content": "请基于已获取的信息给出最终回答。",
+            "role": "assistant",
+            "content": assistant_content,
+            "tool_calls": [
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": name, "arguments": arguments},
+                }
+                for call_id, name, arguments in calls
+            ],
         })
-        try:
-            response = self._chat_completion(messages, model, temperature, max_tokens)
-            return response.choices[0].message.content or ""
-        except Exception:
-            return "（工具调用超限，请简化问题重试）"
+        for call_id, name, raw_arguments in calls:
+            try:
+                arguments = json.loads(raw_arguments)
+            except (json.JSONDecodeError, TypeError):
+                arguments = {}
+            if not isinstance(arguments, dict):
+                arguments = {}
+            result = execute_tool_call(name, arguments)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": result,
+            })
 
     def call_with_fallback(self, prompt: str, fallback_value: str | None = None) -> str:
         """调用 LLM, 失败时返回降级值 (而非抛异常)。"""
@@ -282,6 +330,44 @@ def parse_llm_json_output(text: str) -> dict | list | None:
             except json.JSONDecodeError:
                 continue
     return None
+
+
+def is_tool_protocol_content(text: str) -> bool:
+    """判断响应是否为模型内部工具协议，而不是可展示的最终正文。"""
+    if not text:
+        return False
+    normalized = text.strip().replace("｜", "|")
+    return bool(
+        re.match(
+            r"^(?:<\|\|DSML\|\|(?:tool_calls?|invoke)|<tool_calls?|<tool_call)",
+            normalized,
+            re.IGNORECASE,
+        )
+    )
+
+
+def parse_text_tool_calls(text: str) -> list[tuple[str, dict]]:
+    """解析 DeepSeek 偶尔写入 content 的 DSML 工具调用协议。"""
+    if not is_tool_protocol_content(text):
+        return []
+
+    normalized = text.replace("｜", "|")
+    calls: list[tuple[str, dict]] = []
+    for invoke in _DSML_INVOKE_RE.finditer(normalized):
+        arguments: dict = {}
+        for parameter in _DSML_PARAMETER_RE.finditer(invoke.group(2)):
+            name = parameter.group(1)
+            string_flag = parameter.group(2)
+            raw_value = unescape(parameter.group(3).strip())
+            if string_flag == "true":
+                arguments[name] = raw_value
+                continue
+            try:
+                arguments[name] = json.loads(raw_value)
+            except json.JSONDecodeError:
+                arguments[name] = raw_value
+        calls.append((invoke.group(1), arguments))
+    return calls
 
 
 _default_client: LLMClient | None = None

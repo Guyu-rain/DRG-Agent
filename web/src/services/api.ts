@@ -7,8 +7,8 @@ export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 export const apiClient = axios.create({
   // 相对路径：开发环境经 Vite 代理转发到后端 :8000，避免跨域
   baseURL: apiBaseUrl,
-  // 文档 / 测试用例生成等接口含 LLM 调用，预留较长超时
-  timeout: 60000,
+  // 文档 / 测试用例生成可能进行多轮 LLM 工具调用，不设置固定超时
+  timeout: 0,
   headers: { 'Content-Type': 'application/json' },
 });
 
