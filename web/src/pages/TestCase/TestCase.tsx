@@ -1,5 +1,5 @@
 import { ExportOutlined, PlayCircleOutlined, SendOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Descriptions, Drawer, Form, InputNumber, Select, Space, Table, Tag, message } from 'antd';
+import { App, Button, Card, Checkbox, Col, Descriptions, Drawer, Form, InputNumber, Row, Select, Space, Statistic, Table, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/Common/PageHeader';
 import { RuleVersionSelector } from '@/pages/DRGGrouping/components/RuleVersionSelector';
@@ -10,7 +10,76 @@ import { priorityLabels, scenarioLabels } from '@/utils/constants';
 import { triggerDownload } from '@/utils/download';
 import { formatDateTime } from '@/utils/format';
 
+function renderDiagnosisCode(dx: { code?: string | null; name?: string | null } | null | undefined) {
+  if (!dx) return <Typography.Text type="secondary">-</Typography.Text>;
+  return (
+    <Typography.Text>
+      {dx.code ? <Typography.Text code>{dx.code}</Typography.Text> : null}
+      {dx.name ? <> {dx.name}</> : null}
+    </Typography.Text>
+  );
+}
+
+function renderInputCase(inputCase: Record<string, unknown> | null | undefined) {
+  if (!inputCase || !Object.keys(inputCase).length) {
+    return <Typography.Text type="secondary">空病历</Typography.Text>;
+  }
+  const pd = inputCase.primaryDiagnosis as Record<string, unknown> | null;
+  const sd = (inputCase.secondaryDiagnoses as Array<Record<string, unknown>>) || [];
+  const pp = inputCase.primaryProcedure as Record<string, unknown> | null;
+  const op = (inputCase.otherProcedures as Array<Record<string, unknown>>) || [];
+
+  return (
+    <Descriptions column={1} size="small" colon={false}>
+      <Descriptions.Item label="主诊断">{renderDiagnosisCode(pd)}</Descriptions.Item>
+      <Descriptions.Item label="次要诊断">
+        {sd.length > 0
+          ? sd.map((d, i) => <div key={i}>{renderDiagnosisCode(d)}</div>)
+          : <Typography.Text type="secondary">无</Typography.Text>}
+      </Descriptions.Item>
+      <Descriptions.Item label="主要手术">{renderDiagnosisCode(pp)}</Descriptions.Item>
+      {op.length > 0 ? (
+        <Descriptions.Item label="其他手术">
+          {op.map((p, i) => <div key={i}>{renderDiagnosisCode(p)}</div>)}
+        </Descriptions.Item>
+      ) : null}
+    </Descriptions>
+  );
+}
+
+function renderGroupingResult(result: Record<string, unknown> | null | undefined) {
+  if (!result || !Object.keys(result).length) {
+    return <Typography.Text type="secondary">无结果</Typography.Text>;
+  }
+  const grouped = result.isGrouped as boolean | null;
+  if (grouped === false) {
+    return (
+      <Space direction="vertical" size={4}>
+        <Tag color="red">未入组</Tag>
+        {result.stage ? <Typography.Text type="secondary">阶段: {String(result.stage)}</Typography.Text> : null}
+        {result.error ? <Typography.Text type="secondary">原因: {String(result.error)}</Typography.Text> : null}
+      </Space>
+    );
+  }
+  if (grouped === true) {
+    const complication = (result.complication as string) || 'NONE';
+    return (
+      <Row gutter={[8, 8]}>
+        <Col span={8}><Statistic title="MDC" value={String(result.mdc ?? '-')} valueStyle={{ fontSize: 18 }} /></Col>
+        <Col span={8}><Statistic title="ADRG" value={String(result.adrg ?? '-')} valueStyle={{ fontSize: 18 }} /></Col>
+        <Col span={8}><Statistic title="DRG" value={String(result.drg ?? '-')} valueStyle={{ fontSize: 18 }} /></Col>
+        <Col span={24}>
+          <Typography.Text type="secondary">并发症等级 </Typography.Text>
+          <Tag color={complication === 'MCC' ? 'red' : complication === 'CC' ? 'orange' : 'default'}>{complication}</Tag>
+        </Col>
+      </Row>
+    );
+  }
+  return <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(result, null, 2)}</pre>;
+}
+
 export function TestCase() {
+  const { message } = App.useApp();
   const { testcases, isGenerating, generateTestcases, fetchTestcases, setFilter } = useTestcaseStore();
   const [selected, setSelected] = useState<string[]>([]);
   const [detail, setDetail] = useState<TestCaseItem | null>(null);
@@ -188,24 +257,54 @@ export function TestCase() {
       </div>
       <Drawer open={!!detail} title={detail?.title} width={560} onClose={() => setDetail(null)}>
         {detail ? (
-          <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="ID">{detail.testCaseId}</Descriptions.Item>
-            <Descriptions.Item label="类型">{scenarioLabels[detail.scenarioType]}</Descriptions.Item>
-            <Descriptions.Item label="优先级">{priorityLabels[detail.priority]}</Descriptions.Item>
-            <Descriptions.Item label="创建时间">{formatDateTime(detail.createdAt)}</Descriptions.Item>
-            <Descriptions.Item label="输入病历">
-              <pre>{JSON.stringify(detail.inputCase, null, 2)}</pre>
-            </Descriptions.Item>
-            <Descriptions.Item label="预期结果">
-              <pre>{JSON.stringify(detail.expectedResult, null, 2)}</pre>
-            </Descriptions.Item>
-            <Descriptions.Item label="实际结果">
-              <pre>{detail.actualResult ? JSON.stringify(detail.actualResult, null, 2) : '尚未执行'}</pre>
-            </Descriptions.Item>
-            <Descriptions.Item label="执行结论">
-              {detail.isPassed == null ? '尚未执行' : detail.isPassed ? '通过' : '失败'}
-            </Descriptions.Item>
-          </Descriptions>
+          <>
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="ID">{detail.testCaseId}</Descriptions.Item>
+              <Descriptions.Item label="类型">{scenarioLabels[detail.scenarioType]}</Descriptions.Item>
+              <Descriptions.Item label="优先级">{priorityLabels[detail.priority]}</Descriptions.Item>
+              <Descriptions.Item label="创建时间">{formatDateTime(detail.createdAt)}</Descriptions.Item>
+            </Descriptions>
+
+            <h4 style={{ marginBottom: 8 }}>输入病历</h4>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              {renderInputCase(detail.inputCase)}
+            </Card>
+
+            <h4 style={{ marginBottom: 8 }}>分组结果</h4>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} sm={detail.actualResult ? 12 : 24}>
+                <Card size="small" title="预期结果">
+                  {renderGroupingResult(detail.expectedResult)}
+                </Card>
+              </Col>
+              {detail.actualResult ? (
+                <Col xs={24} sm={12}>
+                  <Card size="small" title="实际结果">
+                    {renderGroupingResult(detail.actualResult)}
+                  </Card>
+                </Col>
+              ) : null}
+            </Row>
+
+            <div style={{ marginTop: 16 }}>
+              <Descriptions column={1} bordered size="small">
+                <Descriptions.Item label="执行结论">
+                  {detail.isPassed == null ? (
+                    <Tag>尚未执行</Tag>
+                  ) : detail.isPassed ? (
+                    <Tag color="green">通过</Tag>
+                  ) : (
+                    <Tag color="red">失败</Tag>
+                  )}
+                </Descriptions.Item>
+                {detail.expectedExplanation ? (
+                  <Descriptions.Item label="说明">
+                    <Typography.Text>{detail.expectedExplanation}</Typography.Text>
+                  </Descriptions.Item>
+                ) : null}
+              </Descriptions>
+            </div>
+          </>
         ) : null}
       </Drawer>
     </div>

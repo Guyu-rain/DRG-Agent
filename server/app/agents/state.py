@@ -74,6 +74,7 @@ class TestGenState(TypedDict, total=False):
     rule_analysis: Optional[dict]
     scenarios: Optional[list]
     test_cases: Optional[list]
+    sample_cases_data: list[dict]
 
     status: str
     error: Optional[str]

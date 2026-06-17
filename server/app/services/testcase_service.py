@@ -81,12 +81,34 @@ class TestCaseService:
 
         rule_index = index_from_version(version)
         parsed_rules = parsed_rules_from_version(version)
+        sample_cases_data: list[dict] = []
+        if task.sample_case_ids:
+            from app.models import PatientCase
+
+            for cid in task.sample_case_ids:
+                case = await self.db.get(PatientCase, cid)
+                if case is None:
+                    continue
+                sample_cases_data.append({
+                    "caseId": case.id,
+                    "primaryDiagnosis": {
+                        "code": case.primary_diagnosis_code,
+                        "name": case.primary_diagnosis_name,
+                    },
+                    "secondaryDiagnoses": case.secondary_diagnoses or [],
+                    "primaryProcedure": {
+                        "code": case.primary_procedure_code,
+                        "name": case.primary_procedure_name,
+                    },
+                    "otherProcedures": case.other_procedures or [],
+                })
         try:
             orchestrator = get_orchestrator()
             state = await asyncio.to_thread(
                 orchestrator.execute_test_gen,
                 version.id, task.scenario_types or [], task.scope or {},
                 task.sample_case_ids or [], task.max_count or 50, rule_index, parsed_rules,
+                sample_cases_data,
             )
             await self.db.refresh(task, attribute_names=["status", "finished_at"])
             if task.status == "cancelled":

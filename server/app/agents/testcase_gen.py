@@ -115,6 +115,50 @@ def scenario_construct_agent(state: TestGenState) -> dict:
             {"type": "abnormal", "description": "空病历", "input": {}},
         ])
 
+    sample_cases = state.get("sample_cases_data") or []
+    for case in sample_cases:
+        case_id = case.get("caseId", "unknown")
+        primary_dx = case.get("primaryDiagnosis")
+        secondary_dx = case.get("secondaryDiagnoses", [])
+        primary_proc = case.get("primaryProcedure")
+        other_proc = case.get("otherProcedures", [])
+
+        if "normal" in scenario_types:
+            scenarios.append({
+                "type": "normal",
+                "description": f"病历样本回归: {case_id} (原样入组)",
+                "input": {
+                    "primaryDiagnosis": primary_dx,
+                    "secondaryDiagnoses": secondary_dx,
+                    "primaryProcedure": primary_proc,
+                    "otherProcedures": other_proc,
+                },
+            })
+
+        if "boundary" in scenario_types and (primary_dx or primary_proc):
+            scenarios.append({
+                "type": "boundary",
+                "description": f"病历样本边界: {case_id} (移除次要诊断)",
+                "input": {
+                    "primaryDiagnosis": primary_dx,
+                    "secondaryDiagnoses": [],
+                    "primaryProcedure": primary_proc,
+                    "otherProcedures": other_proc,
+                },
+            })
+
+        if "abnormal" in scenario_types:
+            scenarios.append({
+                "type": "abnormal",
+                "description": f"病历样本异常: {case_id} (主诊断缺失)",
+                "input": {
+                    "primaryDiagnosis": {"code": None, "name": None},
+                    "secondaryDiagnoses": secondary_dx,
+                    "primaryProcedure": primary_proc,
+                    "otherProcedures": other_proc,
+                },
+            })
+
     return {"scenarios": scenarios[:max_count]}
 
 

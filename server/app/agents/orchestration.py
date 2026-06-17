@@ -237,6 +237,7 @@ class AgentOrchestrator:
         max_count: int,
         rule_index: dict,
         parsed_rules: dict,
+        sample_cases_data: list[dict] | None = None,
     ) -> dict:
         """执行测试用例生成工作流, 返回最终 State。"""
         if self._test_graph is None:
@@ -246,6 +247,7 @@ class AgentOrchestrator:
             "scenario_types": scenario_types,
             "scope": scope or {},
             "sample_case_ids": sample_case_ids or [],
+            "sample_cases_data": sample_cases_data or [],
             "max_count": max_count,
             "llm_client": self.llm_client,
             "rule_index": rule_index,
