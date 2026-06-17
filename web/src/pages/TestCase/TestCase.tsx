@@ -10,12 +10,16 @@ import { priorityLabels, scenarioLabels } from '@/utils/constants';
 import { triggerDownload } from '@/utils/download';
 import { formatDateTime } from '@/utils/format';
 
-function renderDiagnosisCode(dx: { code?: string | null; name?: string | null } | null | undefined) {
-  if (!dx) return <Typography.Text type="secondary">-</Typography.Text>;
+type DxLike = { code?: unknown; name?: unknown };
+
+function renderDiagnosisCode(dx: DxLike | null | undefined) {
+  const code = typeof dx?.code === 'string' ? dx.code : null;
+  const name = typeof dx?.name === 'string' ? dx.name : null;
+  if (!code && !name) return <Typography.Text type="secondary">-</Typography.Text>;
   return (
     <Typography.Text>
-      {dx.code ? <Typography.Text code>{dx.code}</Typography.Text> : null}
-      {dx.name ? <> {dx.name}</> : null}
+      {code ? <Typography.Text code>{code}</Typography.Text> : null}
+      {name ? <> {name}</> : null}
     </Typography.Text>
   );
 }
@@ -24,10 +28,10 @@ function renderInputCase(inputCase: Record<string, unknown> | null | undefined) 
   if (!inputCase || !Object.keys(inputCase).length) {
     return <Typography.Text type="secondary">空病历</Typography.Text>;
   }
-  const pd = inputCase.primaryDiagnosis as Record<string, unknown> | null;
-  const sd = (inputCase.secondaryDiagnoses as Array<Record<string, unknown>>) || [];
-  const pp = inputCase.primaryProcedure as Record<string, unknown> | null;
-  const op = (inputCase.otherProcedures as Array<Record<string, unknown>>) || [];
+  const pd = inputCase.primaryDiagnosis as DxLike | null;
+  const sd = (inputCase.secondaryDiagnoses as DxLike[]) || [];
+  const pp = inputCase.primaryProcedure as DxLike | null;
+  const op = (inputCase.otherProcedures as DxLike[]) || [];
 
   return (
     <Descriptions column={1} size="small" colon={false}>

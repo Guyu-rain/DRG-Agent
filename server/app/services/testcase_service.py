@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import ErrorCode, NotFoundException
 from app.core.logging import logger
 from app.engine.grouping_engine import GroupingEngine
-from app.models import ExecutionLog, TestCase, TestTask, utcnow
+from app.models import ExecutionLog, PatientCase, TestCase, TestTask, utcnow
 from app.services.rule_service import RuleService, index_from_version, parsed_rules_from_version
 
 
@@ -83,11 +83,13 @@ class TestCaseService:
         parsed_rules = parsed_rules_from_version(version)
         sample_cases_data: list[dict] = []
         if task.sample_case_ids:
-            from app.models import PatientCase
-
-            for cid in task.sample_case_ids:
-                case = await self.db.get(PatientCase, cid)
-                if case is None:
+            result = await self.db.execute(
+                select(PatientCase).where(PatientCase.id.in_(task.sample_case_ids))
+            )
+            cases_by_id = {case.id: case for case in result.scalars()}
+            for case_id in task.sample_case_ids:
+                case = cases_by_id.get(case_id)
+                if not case:
                     continue
                 sample_cases_data.append({
                     "caseId": case.id,

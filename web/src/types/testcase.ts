@@ -31,6 +31,7 @@ export interface TestCaseItem {
   inputCase: Record<string, unknown>;
   expectedResult: Record<string, unknown>;
   actualResult?: Record<string, unknown>;
+  expectedExplanation?: string | null;
   isPassed?: boolean | null;
   executedAt?: string;
   createdAt: string;
