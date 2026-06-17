@@ -10,6 +10,13 @@ from app.engine.grouping_engine import GroupingEngine
 from app.llm import parse_llm_json_output, render_prompt
 
 
+def _has_code_or_name(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and (bool(value.get("code")) or bool(value.get("name")))
+    )
+
+
 def rule_analyze_agent(state: TestGenState) -> dict:
     """分析规则, 提取可测的条件组合。"""
     rules = state.get("parsed_rules") or {}
@@ -114,6 +121,50 @@ def scenario_construct_agent(state: TestGenState) -> dict:
              "input": {"primaryDiagnosis": {"code": None, "name": "仅名称诊断"}}},
             {"type": "abnormal", "description": "空病历", "input": {}},
         ])
+
+    sample_cases = state.get("sample_cases_data") or []
+    for case in sample_cases:
+        case_id = case.get("caseId", "unknown")
+        primary_dx = case.get("primaryDiagnosis")
+        secondary_dx = case.get("secondaryDiagnoses", [])
+        primary_proc = case.get("primaryProcedure")
+        other_proc = case.get("otherProcedures", [])
+
+        if "normal" in scenario_types:
+            scenarios.append({
+                "type": "normal",
+                "description": f"病历样本回归: {case_id} (原样入组)",
+                "input": {
+                    "primaryDiagnosis": primary_dx,
+                    "secondaryDiagnoses": secondary_dx,
+                    "primaryProcedure": primary_proc,
+                    "otherProcedures": other_proc,
+                },
+            })
+
+        if "boundary" in scenario_types and (_has_code_or_name(primary_dx) or _has_code_or_name(primary_proc)):
+            scenarios.append({
+                "type": "boundary",
+                "description": f"病历样本边界: {case_id} (移除次要诊断)",
+                "input": {
+                    "primaryDiagnosis": primary_dx,
+                    "secondaryDiagnoses": [],
+                    "primaryProcedure": primary_proc,
+                    "otherProcedures": other_proc,
+                },
+            })
+
+        if "abnormal" in scenario_types:
+            scenarios.append({
+                "type": "abnormal",
+                "description": f"病历样本异常: {case_id} (主诊断缺失)",
+                "input": {
+                    "primaryDiagnosis": {"code": None, "name": None},
+                    "secondaryDiagnoses": secondary_dx,
+                    "primaryProcedure": primary_proc,
+                    "otherProcedures": other_proc,
+                },
+            })
 
     return {"scenarios": scenarios[:max_count]}
 

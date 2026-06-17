@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import ErrorCode, NotFoundException
 from app.core.logging import logger
 from app.engine.grouping_engine import GroupingEngine
-from app.models import ExecutionLog, TestCase, TestTask, utcnow
+from app.models import ExecutionLog, PatientCase, TestCase, TestTask, utcnow
 from app.services.rule_service import RuleService, index_from_version, parsed_rules_from_version
 
 
@@ -81,12 +81,36 @@ class TestCaseService:
 
         rule_index = index_from_version(version)
         parsed_rules = parsed_rules_from_version(version)
+        sample_cases_data: list[dict] = []
+        if task.sample_case_ids:
+            result = await self.db.execute(
+                select(PatientCase).where(PatientCase.id.in_(task.sample_case_ids))
+            )
+            cases_by_id = {case.id: case for case in result.scalars()}
+            for case_id in task.sample_case_ids:
+                case = cases_by_id.get(case_id)
+                if not case:
+                    continue
+                sample_cases_data.append({
+                    "caseId": case.id,
+                    "primaryDiagnosis": {
+                        "code": case.primary_diagnosis_code,
+                        "name": case.primary_diagnosis_name,
+                    },
+                    "secondaryDiagnoses": case.secondary_diagnoses or [],
+                    "primaryProcedure": {
+                        "code": case.primary_procedure_code,
+                        "name": case.primary_procedure_name,
+                    },
+                    "otherProcedures": case.other_procedures or [],
+                })
         try:
             orchestrator = get_orchestrator()
             state = await asyncio.to_thread(
                 orchestrator.execute_test_gen,
                 version.id, task.scenario_types or [], task.scope or {},
                 task.sample_case_ids or [], task.max_count or 50, rule_index, parsed_rules,
+                sample_cases_data,
             )
             await self.db.refresh(task, attribute_names=["status", "finished_at"])
             if task.status == "cancelled":
